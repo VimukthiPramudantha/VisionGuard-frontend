@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Constants from 'expo-constants';
 import {
   View,
   Text,
@@ -52,6 +53,7 @@ export default function CameraDashboard() {
 
   // Dynamic API Base URL resolution
   const getApiBase = () => {
+    // 1. Web browser client
     if (Platform.OS === 'web') {
       if (typeof window !== 'undefined') {
         const hostname = window.location.hostname;
@@ -60,10 +62,21 @@ export default function CameraDashboard() {
       }
       return 'http://localhost:8000';
     }
-    if (Platform.OS === 'android') {
-      return 'http://10.0.2.2:8000'; 
+
+    // 2. Native mobile app - parse the developer PC's IP from hostUri in Expo Go
+    const hostUri = Constants.expoConfig?.hostUri; // e.g. "10.82.39.x:8081"
+    if (hostUri) {
+      const ip = hostUri.split(':')[0];
+      if (ip) {
+        return `http://${ip}:8000`;
+      }
     }
-    return 'http://localhost:8000';
+
+    // 3. Fallbacks
+    if (Platform.OS === 'android') {
+      return 'http://10.0.2.2:8000'; // Android Emulator
+    }
+    return 'http://localhost:8000'; // iOS Simulator / Local fallback
   };
 
   const API_BASE = getApiBase();
