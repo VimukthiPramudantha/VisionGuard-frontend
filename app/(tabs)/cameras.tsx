@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Constants from 'expo-constants';
 import {
   View,
@@ -29,6 +29,110 @@ interface Camera {
   url: string;
   status: 'online' | 'offline' | 'added';
 }
+
+const CameraStream = ({ camera, isActive, isDark }: { camera: Camera; isActive: boolean; isDark: boolean }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    // Web: Access local webcam
+    if (camera.type === 'webcam' && isActive && Platform.OS === 'web') {
+      let isMounted = true;
+      navigator.mediaDevices
+        .getUserMedia({ video: true })
+        .then((stream) => {
+          if (isMounted && videoRef.current) {
+            videoRef.current.srcObject = stream;
+            videoRef.current.play().catch((err) => console.log('Video play error:', err));
+            streamRef.current = stream;
+          } else {
+            stream.getTracks().forEach((track) => track.stop());
+          }
+        })
+        .catch((err) => {
+          console.error('Error accessing local webcam:', err);
+        });
+
+      return () => {
+        isMounted = false;
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+        }
+      };
+    }
+  }, [isActive, camera.type]);
+
+  if (!isActive) {
+    return (
+      <View style={styles.feedInactive}>
+        <IconSymbol size={48} name="video.fill" color={isDark ? '#48484A' : '#D1D1D6'} />
+        <Text style={[styles.feedInactiveText, { color: isDark ? '#8E8E93' : '#8E8E93' }]}>
+          Detection Standby
+        </Text>
+      </View>
+    );
+  }
+
+  if (camera.type === 'webcam') {
+    if (Platform.OS === 'web') {
+      return (
+        <video
+          ref={videoRef}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }}
+          muted
+          playsInline
+        />
+      );
+    } else {
+      return (
+        <View style={styles.feedInactive}>
+          <Text style={[styles.feedInactiveText, { color: isDark ? '#8E8E93' : '#8E8E93' }]}>
+            Live Webcam (Preview is available on PC Web)
+          </Text>
+        </View>
+      );
+    }
+  }
+
+  // IP Camera / Phone MJPEG Stream
+  if (camera.type === 'ip') {
+    if (Platform.OS === 'web') {
+      return (
+        <img
+          src={camera.url}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', backgroundColor: '#000' }}
+          alt={camera.name}
+          onError={(e) => {
+            // Fallback for RTSP or invalid image feeds (browsers can't display RTSP natively)
+            e.currentTarget.style.display = 'none';
+            const parent = e.currentTarget.parentElement;
+            if (parent) {
+              const fallbackEl = document.createElement('div');
+              fallbackEl.style.cssText = 'display:flex;flex-direction:column;justify-content:center;align-items:center;height:100%;color:#8E8E93;padding:20px;text-align:center;';
+              fallbackEl.innerHTML = `
+                <span style="font-size:24px;">⚠️</span>
+                <span style="margin-top:8px;font-size:12px;font-weight:500;">Browser cannot render RTSP stream natively.</span>
+                <span style="font-size:11px;opacity:0.7;margin-top:4px;">Stream URL: ${camera.url} is forwarding to YOLO backend.</span>
+              `;
+              parent.appendChild(fallbackEl);
+            }
+          }}
+        />
+      );
+    } else {
+      return (
+        <Image
+          source={{ uri: camera.url }}
+          style={{ width: '100%', height: '100%' }}
+          contentFit="contain"
+        />
+      );
+    }
+  }
+
+  return null;
+};
 
 export default function CameraDashboard() {
   const colorScheme = useColorScheme();
@@ -102,15 +206,24 @@ export default function CameraDashboard() {
 
   const handleAddIPCamera = async () => {
     setValidationError('');
-    if (!newCamName.trim()) {
+    const name = newCamName.trim();
+    let url = newCamUrl.trim();
+
+    if (!name) {
       setValidationError('Camera name is required.');
       return;
     }
-    if (!newCamUrl.trim()) {
+    if (!url) {
       setValidationError('RTSP or HTTP stream URL is required.');
       return;
     }
-    if (!newCamUrl.startsWith('rtsp://') && !newCamUrl.startsWith('http://') && !newCamUrl.startsWith('https://')) {
+
+    // Auto-prefix http:// if no protocol scheme is defined
+    if (!url.includes('://')) {
+      url = `http://${url}`;
+    }
+
+    if (!url.startsWith('rtsp://') && !url.startsWith('http://') && !url.startsWith('https://')) {
       setValidationError('URL must start with rtsp://, http://, or https://');
       return;
     }
@@ -120,7 +233,7 @@ export default function CameraDashboard() {
       const response = await fetch(`${API_BASE}/cameras/ip`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newCamName.trim(), rtsp_url: newCamUrl.trim() }),
+        body: JSON.stringify({ name, rtsp_url: url }),
       });
 
       if (!response.ok) {
@@ -178,29 +291,26 @@ export default function CameraDashboard() {
           </View>
         </View>
 
-        {/* Video stream container mockup */}
+        {/* Video stream container showing live footage */}
         <View style={styles.streamMockContainer}>
-          {isDetecting ? (
-            <View style={styles.feedActive}>
-              {/* Mock scanning overlay */}
+          <CameraStream camera={item} isActive={isDetecting} isDark={isDark} />
+          
+          {isDetecting && (
+            <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+              {/* Pulse LIVE badge overlayed on top */}
+              <View style={styles.liveIndicator}>
+                <View style={styles.livePulseDot} />
+                <Text style={styles.liveText}>REC • LIVE FEED</Text>
+              </View>
+              
+              {/* YOLO Bounding Box Overlay */}
               <View style={styles.detectionBoxCar}>
                 <Text style={styles.detectionLabel}>Car [94%]</Text>
               </View>
               <View style={styles.detectionBoxBus}>
                 <Text style={styles.detectionLabel}>Bus [88%]</Text>
               </View>
-              <View style={styles.liveIndicator}>
-                <View style={styles.livePulseDot} />
-                <Text style={styles.liveText}>REC • LIVE FEED</Text>
-              </View>
               <Text style={styles.gridOverlayText}>VisionGuard YOLO v11 Active</Text>
-            </View>
-          ) : (
-            <View style={styles.feedInactive}>
-              <IconSymbol size={48} name="video.fill" color={isDark ? '#48484A' : '#D1D1D6'} />
-              <Text style={[styles.feedInactiveText, { color: isDark ? '#8E8E93' : '#8E8E93' }]}>
-                Detection Standby
-              </Text>
             </View>
           )}
         </View>
@@ -300,13 +410,8 @@ export default function CameraDashboard() {
         )}
       </View>
 
-      {/* Add Camera Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
+      {/* Add Camera Modal Overlay */}
+      {modalVisible && (
         <View style={styles.modalOverlay}>
           <Pressable style={styles.modalDismissArea} onPress={() => setModalVisible(false)} />
           <View style={[styles.modalContent, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF' }]}>
@@ -348,7 +453,7 @@ export default function CameraDashboard() {
                     borderColor: isDark ? '#3A3A3C' : '#E5E5EA',
                   },
                 ]}
-                placeholder="rtsp://username:password@ip_address:554/stream"
+                placeholder="e.g. 10.82.39.209:8080 (or RTSP)"
                 placeholderTextColor={isDark ? '#8E8E93' : '#AEAEB2'}
                 value={newCamUrl}
                 onChangeText={setNewCamUrl}
@@ -380,7 +485,7 @@ export default function CameraDashboard() {
             </View>
           </View>
         </View>
-      </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -661,11 +766,16 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   modalOverlay: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    zIndex: 999,
   },
   modalDismissArea: {
     ...StyleSheet.absoluteFillObject,
