@@ -41,18 +41,7 @@ const CameraStream = ({
   isDark: boolean; 
   apiBase: string; 
 }) => {
-  if (!isActive) {
-    return (
-      <View style={styles.feedInactive}>
-        <IconSymbol size={48} name="video.fill" color={isDark ? '#48484A' : '#D1D1D6'} />
-        <Text style={[styles.feedInactiveText, { color: isDark ? '#8E8E93' : '#8E8E93' }]}>
-          Detection Standby
-        </Text>
-      </View>
-    );
-  }
-
-  const streamUrl = `${apiBase}/cameras/stream/${camera.id}`;
+  const streamUrl = `${apiBase}/cameras/stream/${camera.id}?detect=${isActive}`;
 
   if (Platform.OS === 'web') {
     return (
@@ -333,10 +322,13 @@ export default function CameraDashboard() {
           </View>
         ) : (
           <FlatList
+            key={isLargeScreen ? 'grid' : 'list'}
+            numColumns={isLargeScreen ? 2 : 1}
+            columnWrapperStyle={isLargeScreen ? styles.columnWrapper : undefined}
             data={cameras}
             keyExtractor={(item) => item.id.toString()}
             renderItem={renderCameraCard}
-            contentContainerStyle={[styles.listContainer, isLargeScreen && styles.listContainerLarge]}
+            contentContainerStyle={styles.listContainer}
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0A7EA4']} />
@@ -530,9 +522,8 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 20,
   },
-  listContainerLarge: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  columnWrapper: {
+    gap: 20,
   },
   cameraCard: {
     borderRadius: 16,
@@ -553,7 +544,7 @@ const styles = StyleSheet.create({
     borderColor: '#2C2C2E',
   },
   cardLarge: {
-    width: '48%', // Show cards in columns on desktop
+    flex: 1,
     minWidth: 320,
   },
   cardHeader: {
