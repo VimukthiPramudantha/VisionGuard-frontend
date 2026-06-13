@@ -34,14 +34,12 @@ const CameraStream = ({
   camera, 
   isActive, 
   isDark, 
-  apiBase,
-  modelType
+  apiBase
 }: { 
   camera: Camera; 
   isActive: boolean; 
   isDark: boolean; 
   apiBase: string; 
-  modelType: 'custom' | 'pretrained';
 }) => {
   if (!isActive) {
     return (
@@ -54,7 +52,7 @@ const CameraStream = ({
     );
   }
 
-  const streamUrl = `${apiBase}/cameras/stream/${camera.id}?model_type=${modelType}`;
+  const streamUrl = `${apiBase}/cameras/stream/${camera.id}`;
 
   if (Platform.OS === 'web') {
     return (
@@ -106,9 +104,6 @@ export default function CameraDashboard() {
   const [newCamUrl, setNewCamUrl] = useState('');
   const [validationError, setValidationError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  // Model selection state: custom vs pretrained
-  const [modelType, setModelType] = useState<'custom' | 'pretrained'>('custom');
 
   // Real-time detection simulation states
   const [activeDetections, setActiveDetections] = useState<Record<number, boolean>>({});
@@ -251,7 +246,7 @@ export default function CameraDashboard() {
 
         {/* Video stream container showing live footage */}
         <View style={styles.streamMockContainer}>
-          <CameraStream camera={item} isActive={isDetecting} isDark={isDark} apiBase={API_BASE} modelType={modelType} />
+          <CameraStream camera={item} isActive={isDetecting} isDark={isDark} apiBase={API_BASE} />
           
           {isDetecting && (
             <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
@@ -301,57 +296,17 @@ export default function CameraDashboard() {
               Monitor connected video feeds and run real-time YOLO object detection.
             </ThemedText>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-            {/* Model Selector Segmented Control */}
-            <View style={[styles.selectorContainer, { backgroundColor: isDark ? '#1C1C1E' : '#E5E5EA' }]}>
-              <TouchableOpacity
-                style={[
-                  styles.selectorButton,
-                  modelType === 'custom' && styles.selectorActiveButton,
-                ]}
-                activeOpacity={0.9}
-                onPress={() => setModelType('custom')}
-              >
-                <Text
-                  style={[
-                    styles.selectorText,
-                    modelType === 'custom' ? styles.selectorActiveText : { color: isDark ? '#ECEDEE' : '#11181C' },
-                  ]}
-                >
-                  Custom Vehicle Model
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.selectorButton,
-                  modelType === 'pretrained' && styles.selectorActiveButton,
-                ]}
-                activeOpacity={0.9}
-                onPress={() => setModelType('pretrained')}
-              >
-                <Text
-                  style={[
-                    styles.selectorText,
-                    modelType === 'pretrained' ? styles.selectorActiveText : { color: isDark ? '#ECEDEE' : '#11181C' },
-                  ]}
-                >
-                  Pretrained (Detects Persons)
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              style={styles.addButton}
-              activeOpacity={0.8}
-              onPress={() => {
-                setValidationError('');
-                setModalVisible(true);
-              }}
-            >
-              <IconSymbol size={20} name="plus" color="#FFFFFF" />
-              <Text style={styles.addButtonText}>Add IP Camera</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.addButton}
+            activeOpacity={0.8}
+            onPress={() => {
+              setValidationError('');
+              setModalVisible(true);
+            }}
+          >
+            <IconSymbol size={20} name="plus" color="#FFFFFF" />
+            <Text style={styles.addButtonText}>Add IP Camera</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Error panel if backend fails */}
