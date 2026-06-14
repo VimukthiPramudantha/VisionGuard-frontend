@@ -30,108 +30,50 @@ interface Camera {
   status: 'online' | 'offline' | 'added';
 }
 
-const CameraStream = ({ camera, isActive, isDark }: { camera: Camera; isActive: boolean; isDark: boolean }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+const CameraStream = ({ 
+  camera, 
+  isActive, 
+  isDark, 
+  apiBase
+}: { 
+  camera: Camera; 
+  isActive: boolean; 
+  isDark: boolean; 
+  apiBase: string; 
+}) => {
+  const streamUrl = `${apiBase}/cameras/stream/${camera.id}?detect=${isActive}`;
 
-  useEffect(() => {
-    // Web: Access local webcam
-    if (camera.type === 'webcam' && isActive && Platform.OS === 'web') {
-      let isMounted = true;
-      navigator.mediaDevices
-        .getUserMedia({ video: true })
-        .then((stream) => {
-          if (isMounted && videoRef.current) {
-            videoRef.current.srcObject = stream;
-            videoRef.current.play().catch((err) => console.log('Video play error:', err));
-            streamRef.current = stream;
-          } else {
-            stream.getTracks().forEach((track) => track.stop());
-          }
-        })
-        .catch((err) => {
-          console.error('Error accessing local webcam:', err);
-        });
-
-      return () => {
-        isMounted = false;
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach((track) => track.stop());
-          streamRef.current = null;
-        }
-      };
-    }
-  }, [isActive, camera.type]);
-
-  if (!isActive) {
+  if (Platform.OS === 'web') {
     return (
-      <View style={styles.feedInactive}>
-        <IconSymbol size={48} name="video.fill" color={isDark ? '#48484A' : '#D1D1D6'} />
-        <Text style={[styles.feedInactiveText, { color: isDark ? '#8E8E93' : '#8E8E93' }]}>
-          Detection Standby
-        </Text>
-      </View>
+      <img
+        src={streamUrl}
+        style={{ width: '100%', height: '100%', objectFit: 'contain', backgroundColor: '#000' }}
+        alt={camera.name}
+        onError={(e) => {
+          e.currentTarget.style.display = 'none';
+          const parent = e.currentTarget.parentElement;
+          if (parent) {
+            const fallbackEl = document.createElement('div');
+            fallbackEl.style.cssText = 'display:flex;flex-direction:column;justify-content:center;align-items:center;height:100%;color:#8E8E93;padding:20px;text-align:center;';
+            fallbackEl.innerHTML = `
+              <span style="font-size:24px;">⚠️</span>
+              <span style="margin-top:8px;font-size:12px;font-weight:500;">Connection to YOLO stream failed.</span>
+              <span style="font-size:11px;opacity:0.7;margin-top:4px;">Ensure the FastAPI backend is running with GPU acceleration.</span>
+            `;
+            parent.appendChild(fallbackEl);
+          }
+        }}
+      />
+    );
+  } else {
+    return (
+      <Image
+        source={{ uri: streamUrl }}
+        style={{ width: '100%', height: '100%' }}
+        contentFit="contain"
+      />
     );
   }
-
-  if (camera.type === 'webcam') {
-    if (Platform.OS === 'web') {
-      return (
-        <video
-          ref={videoRef}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }}
-          muted
-          playsInline
-        />
-      );
-    } else {
-      return (
-        <View style={styles.feedInactive}>
-          <Text style={[styles.feedInactiveText, { color: isDark ? '#8E8E93' : '#8E8E93' }]}>
-            Live Webcam (Preview is available on PC Web)
-          </Text>
-        </View>
-      );
-    }
-  }
-
-  // IP Camera / Phone MJPEG Stream
-  if (camera.type === 'ip') {
-    if (Platform.OS === 'web') {
-      return (
-        <img
-          src={camera.url}
-          style={{ width: '100%', height: '100%', objectFit: 'contain', backgroundColor: '#000' }}
-          alt={camera.name}
-          onError={(e) => {
-            // Fallback for RTSP or invalid image feeds (browsers can't display RTSP natively)
-            e.currentTarget.style.display = 'none';
-            const parent = e.currentTarget.parentElement;
-            if (parent) {
-              const fallbackEl = document.createElement('div');
-              fallbackEl.style.cssText = 'display:flex;flex-direction:column;justify-content:center;align-items:center;height:100%;color:#8E8E93;padding:20px;text-align:center;';
-              fallbackEl.innerHTML = `
-                <span style="font-size:24px;">⚠️</span>
-                <span style="margin-top:8px;font-size:12px;font-weight:500;">Browser cannot render RTSP stream natively.</span>
-                <span style="font-size:11px;opacity:0.7;margin-top:4px;">Stream URL: ${camera.url} is forwarding to YOLO backend.</span>
-              `;
-              parent.appendChild(fallbackEl);
-            }
-          }}
-        />
-      );
-    } else {
-      return (
-        <Image
-          source={{ uri: camera.url }}
-          style={{ width: '100%', height: '100%' }}
-          contentFit="contain"
-        />
-      );
-    }
-  }
-
-  return null;
 };
 
 export default function CameraDashboard() {
@@ -293,7 +235,7 @@ export default function CameraDashboard() {
 
         {/* Video stream container showing live footage */}
         <View style={styles.streamMockContainer}>
-          <CameraStream camera={item} isActive={isDetecting} isDark={isDark} />
+          <CameraStream camera={item} isActive={isDetecting} isDark={isDark} apiBase={API_BASE} />
           
           {isDetecting && (
             <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
@@ -303,13 +245,6 @@ export default function CameraDashboard() {
                 <Text style={styles.liveText}>REC • LIVE FEED</Text>
               </View>
               
-              {/* YOLO Bounding Box Overlay */}
-              <View style={styles.detectionBoxCar}>
-                <Text style={styles.detectionLabel}>Car [94%]</Text>
-              </View>
-              <View style={styles.detectionBoxBus}>
-                <Text style={styles.detectionLabel}>Bus [88%]</Text>
-              </View>
               <Text style={styles.gridOverlayText}>VisionGuard YOLO v11 Active</Text>
             </View>
           )}
@@ -387,10 +322,13 @@ export default function CameraDashboard() {
           </View>
         ) : (
           <FlatList
+            key={isLargeScreen ? 'grid' : 'list'}
+            numColumns={isLargeScreen ? 2 : 1}
+            columnWrapperStyle={isLargeScreen ? styles.columnWrapper : undefined}
             data={cameras}
             keyExtractor={(item) => item.id.toString()}
             renderItem={renderCameraCard}
-            contentContainerStyle={[styles.listContainer, isLargeScreen && styles.listContainerLarge]}
+            contentContainerStyle={styles.listContainer}
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0A7EA4']} />
@@ -584,9 +522,8 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 20,
   },
-  listContainerLarge: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  columnWrapper: {
+    gap: 20,
   },
   cameraCard: {
     borderRadius: 16,
@@ -607,7 +544,7 @@ const styles = StyleSheet.create({
     borderColor: '#2C2C2E',
   },
   cardLarge: {
-    width: '48%', // Show cards in columns on desktop
+    flex: 1,
     minWidth: 320,
   },
   cardHeader: {
@@ -643,7 +580,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   streamMockContainer: {
-    height: 180,
+    height: 500,
+    width:600,
     backgroundColor: '#000000',
     borderRadius: 12,
     overflow: 'hidden',
@@ -776,6 +714,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     zIndex: 999,
+  },
+  selectorContainer: {
+    flexDirection: 'row',
+    borderRadius: 8,
+    padding: 2,
+    alignItems: 'center',
+    height: 44,
+  },
+  selectorButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectorActiveButton: {
+    backgroundColor: '#0A7EA4',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  selectorText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  selectorActiveText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
   modalDismissArea: {
     ...StyleSheet.absoluteFillObject,
