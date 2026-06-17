@@ -218,12 +218,12 @@ export default function SignupScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
       style={styles.container}
     >
       {/* Background Decorative Glows for the Form Area */}
-      <View style={[styles.ambientGlow, styles.ambient1]} />
-      <View style={[styles.ambientGlow, styles.ambient2]} />
+      <View pointerEvents="none" style={[styles.ambientGlow, styles.ambient1]} />
+      <View pointerEvents="none" style={[styles.ambientGlow, styles.ambient2]} />
 
       {isDesktop ? (
         <View style={styles.desktopLayout}>

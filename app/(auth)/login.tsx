@@ -20,12 +20,10 @@ import AuthInput from '../../components/ui/AuthInput';
 import AuthButton from '../../components/ui/AuthButton';
 
 let goeyToast: any = null;
-if (Platform.OS === 'web') {
-  try {
-    goeyToast = require('goey-toast').goeyToast;
-  } catch (e) {
-    console.warn('goey-toast failed to load in login page', e);
-  }
+try {
+  goeyToast = require('goey-toast').goeyToast;
+} catch (e) {
+  console.warn('goey-toast failed to load in login page', e);
 }
 
 export default function LoginScreen() {
@@ -202,12 +200,12 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
       style={styles.container}
     >
       {/* Background Decorative Glows for the Form Area */}
-      <View style={[styles.ambientGlow, styles.ambient1]} />
-      <View style={[styles.ambientGlow, styles.ambient2]} />
+      <View pointerEvents="none" style={[styles.ambientGlow, styles.ambient1]} />
+      <View pointerEvents="none" style={[styles.ambientGlow, styles.ambient2]} />
 
       {isDesktop ? (
         <View style={styles.desktopLayout}>
@@ -219,7 +217,7 @@ export default function LoginScreen() {
       ) : (
         <ScrollView
           contentContainerStyle={styles.scrollContainer}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
         >
           <View style={styles.mobileBrand}>
             <View style={styles.mobileLogoWrapper}>
