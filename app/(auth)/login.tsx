@@ -12,12 +12,21 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Shield, Eye, Bell, Cpu } from 'lucide-react-native';
+import { Shield, Eye, Bell, Cpu, ArrowRight } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../../services/api';
 import AuthCard from '../../components/ui/AuthCard';
 import AuthInput from '../../components/ui/AuthInput';
 import AuthButton from '../../components/ui/AuthButton';
+
+let goeyToast: any = null;
+if (Platform.OS === 'web') {
+  try {
+    goeyToast = require('goey-toast').goeyToast;
+  } catch (e) {
+    console.warn('goey-toast failed to load in login page', e);
+  }
+}
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -27,9 +36,27 @@ export default function LoginScreen() {
 
   const isDesktop = Platform.OS === 'web' && width >= 800;
 
+  const triggerToast = (type: 'success' | 'error', title: string, message?: string) => {
+    if (Platform.OS === 'web' && goeyToast) {
+      if (type === 'success') {
+        goeyToast.success(title, message ? { description: message } : undefined);
+      } else {
+        goeyToast.error(title, message ? { description: message } : undefined);
+      }
+    } else {
+      Alert.alert(title, message || '');
+    }
+  };
+
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill all fields');
+      triggerToast('error', 'Error', 'Please fill all fields');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      triggerToast('error', 'Error', 'Please enter a valid email address');
       return;
     }
 
@@ -41,11 +68,12 @@ export default function LoginScreen() {
       await AsyncStorage.setItem('authToken', response.data.user?.id || 'dummy-token');
       await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
 
-      Alert.alert('Success', 'Welcome back!');
+      triggerToast('success', 'Success', 'Welcome back!');
       router.replace('/(tabs)/dashboard');
     } catch (error: any) {
       console.error(error);
-      Alert.alert(
+      triggerToast(
+        'error',
         'Login Failed',
         error.response?.data?.detail || 'Invalid credentials'
       );
@@ -60,57 +88,64 @@ export default function LoginScreen() {
 
   const renderLeftPanel = () => (
     <View style={styles.leftPanel}>
+      {/* Decorative Glow Blobs */}
+      <View style={[styles.glowBlob, styles.blob1]} />
+      <View style={[styles.glowBlob, styles.blob2]} />
+
       <View style={styles.brandContainer}>
         <View style={styles.logoWrapper}>
-          <Shield size={40} color="#52D0EB" />
+          <Shield size={38} color="#52D0EB" />
+          <View style={styles.logoGlow} />
         </View>
         <Text style={styles.brandTitle}>VisionGuard</Text>
         <Text style={styles.brandSubtitle}>
-          Enterprise Intelligent Security & Camera Analytics
+          Next-generation AI video analytics and real-time surveillance defense.
         </Text>
       </View>
 
       <View style={styles.featuresList}>
-        <View style={styles.featureItem}>
-          <View style={styles.featureIcon}>
-            <Cpu size={22} color="#52D0EB" />
+        <View style={styles.featureCard}>
+          <View style={[styles.featureIcon, { backgroundColor: 'rgba(82, 208, 235, 0.1)' }]}>
+            <Cpu size={20} color="#52D0EB" />
           </View>
           <View style={styles.featureTexts}>
-            <Text style={styles.featureTitle}>Real-time AI Detection</Text>
+            <Text style={styles.featureTitle}>Cognitive AI Core</Text>
             <Text style={styles.featureDescription}>
-              Instant intelligent processing of video streams for unauthorized access and hazards.
+              Instantly flags suspicious actions, perimeter breaches, and safety hazards.
             </Text>
           </View>
         </View>
 
-        <View style={styles.featureItem}>
-          <View style={styles.featureIcon}>
-            <Bell size={22} color="#52D0EB" />
+        <View style={styles.featureCard}>
+          <View style={[styles.featureIcon, { backgroundColor: 'rgba(95, 235, 82, 0.1)' }]}>
+            <Bell size={20} color="#5FEB52" />
           </View>
           <View style={styles.featureTexts}>
-            <Text style={styles.featureTitle}>Instant Notifications</Text>
+            <Text style={styles.featureTitle}>Zero-latency Alerts</Text>
             <Text style={styles.featureDescription}>
-              Immediate push alerts with localized visual frames directly to your dashboard.
+              Receive rich notifications with live-frame captures and immediate telemetry.
             </Text>
           </View>
         </View>
 
-        <View style={styles.featureItem}>
-          <View style={styles.featureIcon}>
-            <Eye size={22} color="#52D0EB" />
+        <View style={styles.featureCard}>
+          <View style={[styles.featureIcon, { backgroundColor: 'rgba(255, 178, 54, 0.1)' }]}>
+            <Shield size={20} color="#FFB236" />
           </View>
           <View style={styles.featureTexts}>
-            <Text style={styles.featureTitle}>Centralized Control</Text>
+            <Text style={styles.featureTitle}>Secured Integrations</Text>
             <Text style={styles.featureDescription}>
-              Manage multiple security networks and device configurations from a single workspace.
+              Connect network video recorders and IP feeds directly with end-to-end encryption.
             </Text>
           </View>
         </View>
       </View>
 
-      <Text style={styles.copyright}>
-        © {new Date().getFullYear()} VisionGuard. All rights reserved.
-      </Text>
+      <View style={styles.footerBranding}>
+        <Text style={styles.copyright}>
+          VisionGuard Platform v1.2 • Secure System
+        </Text>
+      </View>
     </View>
   );
 
@@ -157,8 +192,9 @@ export default function LoginScreen() {
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>Don't have an account? </Text>
-        <TouchableOpacity onPress={handleSwitchToSignup}>
+        <TouchableOpacity onPress={handleSwitchToSignup} style={styles.switchButton}>
           <Text style={styles.switchText}>Sign Up</Text>
+          <ArrowRight size={14} color="#2d79f3" />
         </TouchableOpacity>
       </View>
     </AuthCard>
@@ -169,6 +205,10 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
+      {/* Background Decorative Glows for the Form Area */}
+      <View style={[styles.ambientGlow, styles.ambient1]} />
+      <View style={[styles.ambientGlow, styles.ambient2]} />
+
       {isDesktop ? (
         <View style={styles.desktopLayout}>
           {renderLeftPanel()}
@@ -182,7 +222,10 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.mobileBrand}>
-            <Shield size={48} color="#2d79f3" />
+            <View style={styles.mobileLogoWrapper}>
+              <Shield size={36} color="#2d79f3" />
+              <View style={styles.mobileLogoGlow} />
+            </View>
             <Text style={styles.mobileTitle}>VisionGuard</Text>
             <Text style={styles.mobileSubtitle}>Intelligent Threat Defense</Text>
           </View>
@@ -196,56 +239,94 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f6f9fc',
   },
   desktopLayout: {
     flex: 1,
     flexDirection: 'row',
   },
   leftPanel: {
-    flex: 1,
-    backgroundColor: '#0b1329',
+    flex: 1.1,
+    backgroundColor: '#05070c',
     padding: 60,
     justifyContent: 'space-between',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  glowBlob: {
+    position: 'absolute',
+    borderRadius: 999,
+    opacity: 0.15,
+    width: 300,
+    height: 300,
+  },
+  blob1: {
+    backgroundColor: '#2d79f3',
+    top: -50,
+    left: -50,
+  },
+  blob2: {
+    backgroundColor: '#52D0EB',
+    bottom: -50,
+    right: -50,
   },
   brandContainer: {
     marginTop: 20,
+    zIndex: 2,
   },
   logoWrapper: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: 'rgba(82, 208, 235, 0.1)',
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: 'rgba(82, 208, 235, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(82, 208, 235, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
+    position: 'relative',
+  },
+  logoGlow: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    backgroundColor: '#52D0EB',
+    borderRadius: 20,
+    opacity: 0.2,
+    zIndex: -1,
   },
   brandTitle: {
     fontSize: 36,
-    fontWeight: '800',
+    fontWeight: '900',
     color: '#ffffff',
-    letterSpacing: -0.5,
+    letterSpacing: -0.8,
   },
   brandSubtitle: {
     fontSize: 16,
     color: '#94a3b8',
-    marginTop: 8,
+    marginTop: 10,
     fontWeight: '400',
+    lineHeight: 24,
   },
   featuresList: {
-    gap: 32,
+    gap: 20,
     marginVertical: 40,
+    zIndex: 2,
   },
-  featureItem: {
+  featureCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    padding: 20,
+    borderRadius: 18,
   },
   featureIcon: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(82, 208, 235, 0.08)',
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 2,
@@ -254,43 +335,69 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   featureTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
     color: '#ffffff',
   },
   featureDescription: {
-    fontSize: 14,
+    fontSize: 13.5,
     color: '#64748b',
     marginTop: 4,
-    lineHeight: 20,
+    lineHeight: 19,
+  },
+  footerBranding: {
+    zIndex: 2,
   },
   copyright: {
     fontSize: 13,
     color: '#475569',
+    fontWeight: '500',
   },
   rightPanel: {
-    flex: 1,
+    flex: 0.9,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
-    backgroundColor: '#f8fafc',
+    backgroundColor: 'transparent',
+    zIndex: 2,
   },
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#f8fafc',
+    padding: 24,
+    zIndex: 2,
   },
   mobileBrand: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 32,
+  },
+  mobileLogoWrapper: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: 'rgba(45, 121, 243, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(45, 121, 243, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  mobileLogoGlow: {
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    backgroundColor: '#2d79f3',
+    borderRadius: 22,
+    opacity: 0.1,
+    zIndex: -1,
   },
   mobileTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#0b1329',
-    marginTop: 12,
+    fontSize: 30,
+    fontWeight: '900',
+    color: '#05070c',
+    marginTop: 16,
+    letterSpacing: -0.5,
   },
   mobileSubtitle: {
     fontSize: 15,
@@ -298,17 +405,18 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   cardTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#151717',
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#0f172a',
     textAlign: 'center',
     marginBottom: 6,
+    letterSpacing: -0.3,
   },
   cardSubtitle: {
-    fontSize: 15,
-    color: '#666',
+    fontSize: 14.5,
+    color: '#64748b',
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 28,
   },
   formGap: {
     gap: 16,
@@ -327,31 +435,58 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderWidth: 1.5,
-    borderColor: '#ccc',
-    borderRadius: 4,
+    borderColor: '#cbd5e1',
+    borderRadius: 5,
     marginRight: 8,
   },
   rememberText: {
-    fontSize: 14,
-    color: '#555',
+    fontSize: 13.5,
+    color: '#475569',
+    fontWeight: '500',
   },
   forgotText: {
     color: '#2d79f3',
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 13.5,
+    fontWeight: '600',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 20,
+    alignItems: 'center',
+    marginTop: 24,
+    gap: 4,
   },
   footerText: {
-    color: '#555',
+    color: '#64748b',
     fontSize: 14,
+    fontWeight: '500',
+  },
+  switchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
   },
   switchText: {
     color: '#2d79f3',
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 14,
+  },
+  ambientGlow: {
+    position: 'absolute',
+    borderRadius: 999,
+    opacity: 0.4,
+    width: 400,
+    height: 400,
+    zIndex: 1,
+  },
+  ambient1: {
+    backgroundColor: 'rgba(82, 208, 235, 0.08)',
+    top: '10%',
+    right: '-10%',
+  },
+  ambient2: {
+    backgroundColor: 'rgba(95, 235, 82, 0.08)',
+    bottom: '5%',
+    left: '30%',
   },
 });
