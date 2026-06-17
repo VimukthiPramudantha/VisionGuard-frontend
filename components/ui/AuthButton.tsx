@@ -1,15 +1,14 @@
 // components/ui/AuthButton.tsx
 import React, { useRef } from 'react';
 import {
-  TouchableOpacity,
   Text,
   StyleSheet,
   View,
   Animated,
   Easing,
   ActivityIndicator,
+  Pressable,
 } from 'react-native';
-import { ArrowRight } from 'lucide-react-native';
 
 interface AuthButtonProps {
   title: string;
@@ -26,61 +25,64 @@ export default function AuthButton({
   loading = false,
   disabled = false,
 }: AuthButtonProps) {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const circleWidth = useRef(new Animated.Value(48)).current; 
+  const animValue = useRef(new Animated.Value(0)).current;
 
-  const handlePressIn = () => {
-    Animated.parallel([
-      Animated.timing(scaleAnim, {
-        toValue: 0.95,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-      Animated.timing(circleWidth, {
-        toValue: 220, 
-        duration: 450,
-        easing: Easing.cubic,
-        useNativeDriver: false,
-      }),
-    ]).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.parallel([
-      Animated.timing(scaleAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(circleWidth, {
-        toValue: 48,
-        duration: 450,
-        easing: Easing.cubic,
-        useNativeDriver: false,
-      }),
-    ]).start();
+  const animateTo = (toValue: number) => {
+    Animated.timing(animValue, {
+      toValue,
+      duration: 450,
+      easing: Easing.bezier(0.65, 0, 0.076, 1),
+      useNativeDriver: false,
+    }).start();
   };
 
   const bgColor = variant === 'signin' ? '#52D0EB' : '#5FEB52';
 
-  return (
-    <TouchableOpacity
-      activeOpacity={1}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      onPress={onPress}
-      disabled={disabled || loading}
-      style={styles.wrapper}
-    >
-      <Animated.View
-        style={[
-          styles.button,
-          {
-            transform: [{ scale: scaleAnim }],
-          },
-        ]}
-      >
+  // Circle width interpolation: 3rem (48px) to 100% (192px)
+  const circleWidth = animValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [48, 192],
+  });
 
+  // Arrow translate x: starts 0, moves 1rem (16px) right
+  const arrowTranslateX = animValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 16],
+  });
+
+  // Arrow shaft line opacity: starts background: none, becomes white background
+  const shaftOpacity = animValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+
+  // Text color: starts #282936, becomes #ffffff
+  const textColor = animValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#282936', '#ffffff'],
+  });
+
+  const handlePress = () => {
+    if (!disabled && !loading) {
+      onPress();
+    }
+  };
+
+  return (
+    <Pressable
+      onPress={handlePress}
+      onPressIn={() => animateTo(1)}
+      onPressOut={() => animateTo(0)}
+      // Support mouse hover triggers on Web
+      // @ts-ignore: web-only props
+      onMouseEnter={() => animateTo(1)}
+      // @ts-ignore: web-only props
+      onMouseLeave={() => animateTo(0)}
+      style={[styles.btnWrapper, (disabled || loading) && styles.disabled]}
+      disabled={disabled || loading}
+    >
+      <View style={styles.button}>
+        {/* Background Circle */}
         <Animated.View
           style={[
             styles.circle,
@@ -90,14 +92,24 @@ export default function AuthButton({
             },
           ]}
         >
-          <View style={styles.arrowContainer}>
-            <ArrowRight size={18} color="#fff" strokeWidth={3} />
-          </View>
+          {/* Custom CSS-equivalent Arrow */}
+          <Animated.View
+            style={[
+              styles.arrowContainer,
+              { transform: [{ translateX: arrowTranslateX }] },
+            ]}
+          >
+            {/* Shaft (shaftOpacity controls background fade-in) */}
+            <Animated.View style={[styles.arrowShaft, { opacity: shaftOpacity }]} />
+            {/* Head (Arrow tip) */}
+            <View style={styles.arrowHead} />
+          </Animated.View>
         </Animated.View>
 
-        <Text style={[styles.text, { color: loading ? '#666' : '#282936' }]}>
-          {loading ? 'Please wait...' : title}
-        </Text>
+        {/* Text */}
+        <Animated.Text style={[styles.buttonText, { color: textColor }]}>
+          {loading ? 'WAIT...' : title}
+        </Animated.Text>
 
         {loading && (
           <ActivityIndicator
@@ -106,57 +118,73 @@ export default function AuthButton({
             style={styles.loader}
           />
         )}
-      </Animated.View>
-    </TouchableOpacity>
+      </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
+  btnWrapper: {
+    marginVertical: 10,
     alignItems: 'center',
-    marginVertical: 8,
+    justifyContent: 'center',
+  },
+  disabled: {
+    opacity: 0.7,
   },
   button: {
-    width: 220, 
-    height: 58,
-    borderRadius: 999,
+    width: 192, // 12rem
+    height: 48, // 3rem
     backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    flexDirection: 'row',
-    alignItems: 'center',
-    overflow: 'hidden',
     position: 'relative',
+    justifyContent: 'center',
   },
   circle: {
     position: 'absolute',
     left: 0,
     top: 0,
-    bottom: 0,
-    width: 48,
-    height: 48,
-    borderRadius: 999,
+    height: 48, // 3rem
+    borderRadius: 26, // 1.625rem
     justifyContent: 'center',
-    alignItems: 'center',
   },
   arrowContainer: {
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  text: {
     position: 'absolute',
-    width: '100%',
+    left: 10, // 0.625rem
+    width: 18, // 1.125rem
+    height: 2, // 0.125rem
+    justifyContent: 'center',
+  },
+  arrowShaft: {
+    width: 18,
+    height: 2,
+    backgroundColor: '#fff',
+    position: 'absolute',
+  },
+  arrowHead: {
+    position: 'absolute',
+    top: -4, // ~ -0.29rem
+    right: 1, // ~ 0.0625rem
+    width: 10, // 0.625rem
+    height: 10, // 0.625rem
+    borderTopWidth: 2, // 0.125rem
+    borderRightWidth: 2, // 0.125rem
+    borderColor: '#fff',
+    transform: [{ rotate: '45deg' }],
+  },
+  buttonText: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     textAlign: 'center',
+    paddingVertical: 12,
+    marginLeft: 30, // 1.85rem indent
     fontSize: 15,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    zIndex: 2,
   },
   loader: {
     position: 'absolute',
-    right: 20,
+    right: 16,
   },
 });
