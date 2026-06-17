@@ -38,25 +38,21 @@ export default function AuthButton({
 
   const bgColor = variant === 'signin' ? '#52D0EB' : '#5FEB52';
 
-  // Circle width interpolation: 3rem (48px) to 100% (192px)
   const circleWidth = animValue.interpolate({
     inputRange: [0, 1],
     outputRange: [48, 192],
   });
 
-  // Arrow translate x: starts 0, moves 1rem (16px) right
   const arrowTranslateX = animValue.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 16],
   });
 
-  // Arrow shaft line opacity: starts background: none, becomes white background
   const shaftOpacity = animValue.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 1],
   });
 
-  // Text color: starts #282936, becomes #ffffff
   const textColor = animValue.interpolate({
     inputRange: [0, 1],
     outputRange: ['#282936', '#ffffff'],
@@ -73,7 +69,6 @@ export default function AuthButton({
       onPress={handlePress}
       onPressIn={() => animateTo(1)}
       onPressOut={() => animateTo(0)}
-      // Support mouse hover triggers on Web
       // @ts-ignore: web-only props
       onMouseEnter={() => animateTo(1)}
       // @ts-ignore: web-only props
@@ -82,7 +77,6 @@ export default function AuthButton({
       disabled={disabled || loading}
     >
       <View style={styles.button}>
-        {/* Background Circle */}
         <Animated.View
           style={[
             styles.circle,
@@ -92,21 +86,17 @@ export default function AuthButton({
             },
           ]}
         >
-          {/* Custom CSS-equivalent Arrow */}
           <Animated.View
             style={[
               styles.arrowContainer,
               { transform: [{ translateX: arrowTranslateX }] },
             ]}
           >
-            {/* Shaft (shaftOpacity controls background fade-in) */}
             <Animated.View style={[styles.arrowShaft, { opacity: shaftOpacity }]} />
-            {/* Head (Arrow tip) */}
             <View style={styles.arrowHead} />
           </Animated.View>
         </Animated.View>
 
-        {/* Text */}
         <Animated.Text style={[styles.buttonText, { color: textColor }]}>
           {loading ? 'WAIT...' : title}
         </Animated.Text>
@@ -133,8 +123,8 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   button: {
-    width: 192, // 12rem
-    height: 48, // 3rem
+    width: 192, 
+    height: 48, 
     backgroundColor: 'transparent',
     position: 'relative',
     justifyContent: 'center',
@@ -143,15 +133,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     top: 0,
-    height: 48, // 3rem
-    borderRadius: 26, // 1.625rem
+    height: 48, 
+    borderRadius: 26,
     justifyContent: 'center',
   },
   arrowContainer: {
     position: 'absolute',
-    left: 10, // 0.625rem
-    width: 18, // 1.125rem
-    height: 2, // 0.125rem
+    left: 10, 
+    width: 18, 
+    height: 2, 
     justifyContent: 'center',
   },
   arrowShaft: {
@@ -162,12 +152,12 @@ const styles = StyleSheet.create({
   },
   arrowHead: {
     position: 'absolute',
-    top: -4, // ~ -0.29rem
-    right: 1, // ~ 0.0625rem
-    width: 10, // 0.625rem
-    height: 10, // 0.625rem
-    borderTopWidth: 2, // 0.125rem
-    borderRightWidth: 2, // 0.125rem
+    top: -4, 
+    right: 1,
+    width: 10,
+    height: 10,
+    borderTopWidth: 2, 
+    borderRightWidth: 2,
     borderColor: '#fff',
     transform: [{ rotate: '45deg' }],
   },
@@ -177,7 +167,7 @@ const styles = StyleSheet.create({
     right: 0,
     textAlign: 'center',
     paddingVertical: 12,
-    marginLeft: 30, // 1.85rem indent
+    marginLeft: 30, 
     fontSize: 15,
     fontWeight: '700',
     textTransform: 'uppercase',

@@ -9,12 +9,15 @@ import {
   useWindowDimensions,
   ScrollView,
   KeyboardAvoidingView,
+  TouchableOpacity,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Shield, Eye, Bell, Cpu } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../../services/api';
 import AuthCard from '../../components/ui/AuthCard';
+import AuthInput from '../../components/ui/AuthInput';
+import AuthButton from '../../components/ui/AuthButton';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -35,7 +38,6 @@ export default function LoginScreen() {
       const response = await api.post('/auth/login', { email, password });
       console.log('Login successful:', response.data);
       
-      // Save dummy token or user info for API interceptor compatibility
       await AsyncStorage.setItem('authToken', response.data.user?.id || 'dummy-token');
       await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
 
@@ -112,6 +114,56 @@ export default function LoginScreen() {
     </View>
   );
 
+  const renderCardContent = () => (
+    <AuthCard>
+      <Text style={styles.cardTitle}>Welcome Back</Text>
+      <Text style={styles.cardSubtitle}>Sign in to continue to VisionGuard</Text>
+
+      <View style={styles.formGap}>
+        <AuthInput
+          label="Email"
+          placeholder="Enter your email"
+          value={email}
+          onChangeText={setEmail}
+          icon="email"
+        />
+
+        <AuthInput
+          label="Password"
+          placeholder="Enter your password"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          icon="password"
+        />
+      </View>
+
+      <View style={styles.flexRow}>
+        <TouchableOpacity style={styles.rememberMe}>
+          <View style={styles.checkbox} />
+          <Text style={styles.rememberText}>Remember me</Text>
+        </TouchableOpacity>
+        <TouchableOpacity>
+          <Text style={styles.forgotText}>Forgot password?</Text>
+        </TouchableOpacity>
+      </View>
+
+      <AuthButton
+        title="Sign In"
+        variant="signin"
+        onPress={handleLogin}
+        loading={loading}
+      />
+
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>Don't have an account? </Text>
+        <TouchableOpacity onPress={handleSwitchToSignup}>
+          <Text style={styles.switchText}>Sign Up</Text>
+        </TouchableOpacity>
+      </View>
+    </AuthCard>
+  );
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -121,16 +173,7 @@ export default function LoginScreen() {
         <View style={styles.desktopLayout}>
           {renderLeftPanel()}
           <View style={styles.rightPanel}>
-            <AuthCard
-              type="login"
-              email={email}
-              setEmail={setEmail}
-              password={password}
-              setPassword={setPassword}
-              loading={loading}
-              onSubmit={handleLogin}
-              onSwitch={handleSwitchToSignup}
-            />
+            {renderCardContent()}
           </View>
         </View>
       ) : (
@@ -143,16 +186,7 @@ export default function LoginScreen() {
             <Text style={styles.mobileTitle}>VisionGuard</Text>
             <Text style={styles.mobileSubtitle}>Intelligent Threat Defense</Text>
           </View>
-          <AuthCard
-            type="login"
-            email={email}
-            setEmail={setEmail}
-            password={password}
-            setPassword={setPassword}
-            loading={loading}
-            onSubmit={handleLogin}
-            onSwitch={handleSwitchToSignup}
-          />
+          {renderCardContent()}
         </ScrollView>
       )}
     </KeyboardAvoidingView>
@@ -262,5 +296,62 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#64748b',
     marginTop: 4,
+  },
+  cardTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#151717',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  cardSubtitle: {
+    fontSize: 15,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  formGap: {
+    gap: 16,
+  },
+  flexRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  rememberMe: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderWidth: 1.5,
+    borderColor: '#ccc',
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  rememberText: {
+    fontSize: 14,
+    color: '#555',
+  },
+  forgotText: {
+    color: '#2d79f3',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  footerText: {
+    color: '#555',
+    fontSize: 14,
+  },
+  switchText: {
+    color: '#2d79f3',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });

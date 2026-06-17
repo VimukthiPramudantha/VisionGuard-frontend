@@ -5,16 +5,17 @@ import AuthInput from './AuthInput';
 import AuthButton from './AuthButton';
 
 interface AuthCardProps {
-  type: 'login' | 'signup';
-  email: string;
-  setEmail: (text: string) => void;
-  password: string;
-  setPassword: (text: string) => void;
+  type?: 'login' | 'signup';
+  email?: string;
+  setEmail?: (text: string) => void;
+  password?: string;
+  setPassword?: (text: string) => void;
   fullName?: string;
   setFullName?: (text: string) => void;
-  loading: boolean;
-  onSubmit: () => void;
-  onSwitch: () => void;
+  loading?: boolean;
+  onSubmit?: () => void;
+  onSwitch?: () => void;
+  children?: React.ReactNode;
 }
 
 export default function AuthCard({
@@ -25,79 +26,94 @@ export default function AuthCard({
   setPassword,
   fullName = '',
   setFullName,
-  loading,
+  loading = false,
   onSubmit,
   onSwitch,
+  children,
 }: AuthCardProps) {
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>
-        {type === 'login' ? 'Welcome Back' : 'Create Account'}
-      </Text>
-      <Text style={styles.subtitle}>
-        {type === 'login'
-          ? 'Sign in to continue to VisionGuard'
-          : 'Join VisionGuard to secure your cameras'}
-      </Text>
-
-      {type === 'signup' && setFullName && (
-        <AuthInput
-          label="Full Name"
-          placeholder="Enter your full name"
-          value={fullName}
-          onChangeText={setFullName}
-          icon="email"
-        />
-      )}
-
-      <AuthInput
-        label="Email"
-        placeholder="Enter your email"
-        value={email}
-        onChangeText={setEmail}
-        icon="email"
-      />
-
-      <AuthInput
-        label="Password"
-        placeholder="Enter your password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        icon="password"
-      />
-
-      {type === 'login' && (
-        <View style={styles.flexRow}>
-          <TouchableOpacity style={styles.rememberMe}>
-            <View style={styles.checkbox} />
-            <Text style={styles.rememberText}>Remember me</Text>
-          </TouchableOpacity>
-          <TouchableOpacity>
-            <Text style={styles.forgotText}>Forgot password?</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <AuthButton
-        title={type === 'login' ? 'Sign In' : 'Sign Up'}
-        variant={type === 'login' ? 'signin' : 'signup'}
-        onPress={onSubmit}
-        loading={loading}
-      />
-
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          {type === 'login'
-            ? "Don't have an account? "
-            : 'Already have an account? '}
-        </Text>
-        <TouchableOpacity onPress={onSwitch}>
-          <Text style={styles.switchText}>
-            {type === 'login' ? 'Sign Up' : 'Sign In'}
+      {children ? (
+        children
+      ) : (
+        <>
+          <Text style={styles.title}>
+            {type === 'login' ? 'Welcome Back' : 'Create Account'}
           </Text>
-        </TouchableOpacity>
-      </View>
+          <Text style={styles.subtitle}>
+            {type === 'login'
+              ? 'Sign in to continue to VisionGuard'
+              : 'Join VisionGuard to secure your cameras'}
+          </Text>
+
+          {type === 'signup' && setFullName && (
+            <AuthInput
+              label="Full Name"
+              placeholder="Enter your full name"
+              value={fullName}
+              onChangeText={setFullName}
+              icon="email"
+            />
+          )}
+
+          {setEmail && (
+            <AuthInput
+              label="Email"
+              placeholder="Enter your email"
+              value={email ?? ''}
+              onChangeText={setEmail}
+              icon="email"
+            />
+          )}
+
+          {setPassword && (
+            <AuthInput
+              label="Password"
+              placeholder="Enter your password"
+              value={password ?? ''}
+              onChangeText={setPassword}
+              secureTextEntry
+              icon="password"
+            />
+          )}
+
+          {type === 'login' && (
+            <View style={styles.flexRow}>
+              <TouchableOpacity style={styles.rememberMe}>
+                <View style={styles.checkbox} />
+                <Text style={styles.rememberText}>Remember me</Text>
+              </TouchableOpacity>
+              <TouchableOpacity>
+                <Text style={styles.forgotText}>Forgot password?</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {onSubmit && (
+            <AuthButton
+              title={type === 'login' ? 'Sign In' : 'Sign Up'}
+              variant={type === 'login' ? 'signin' : 'signup'}
+              onPress={onSubmit}
+              loading={loading}
+            />
+          )}
+
+          {onSwitch && (
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>
+                {type === 'login'
+                  ? "Don't have an account? "
+                  : 'Already have an account? '}
+              </Text>
+              <TouchableOpacity onPress={onSwitch}>
+                <Text style={styles.switchText}>
+                  {type === 'login' ? 'Sign Up' : 'Sign In'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </>
+      )}
     </View>
   );
 }

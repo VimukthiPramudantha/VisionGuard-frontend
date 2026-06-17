@@ -9,11 +9,14 @@ import {
   useWindowDimensions,
   ScrollView,
   KeyboardAvoidingView,
+  TouchableOpacity,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Shield, Eye, Bell, Cpu } from 'lucide-react-native';
 import { api } from '../../services/api';
 import AuthCard from '../../components/ui/AuthCard';
+import AuthInput from '../../components/ui/AuthInput';
+import AuthButton from '../../components/ui/AuthButton';
 
 export default function SignupScreen() {
   const [fullName, setFullName] = useState('');
@@ -112,6 +115,56 @@ export default function SignupScreen() {
     </View>
   );
 
+  const renderCardContent = () => (
+    <AuthCard>
+      <Text style={styles.cardTitle}>Create Account</Text>
+      <Text style={styles.cardSubtitle}>Join VisionGuard to secure your cameras</Text>
+
+      <View style={styles.formGap}>
+        <AuthInput
+          label="Full Name"
+          placeholder="Enter your full name"
+          value={fullName}
+          onChangeText={setFullName}
+          icon="email"
+        />
+
+        <AuthInput
+          label="Email"
+          placeholder="Enter your email"
+          value={email}
+          onChangeText={setEmail}
+          icon="email"
+        />
+
+        <AuthInput
+          label="Password"
+          placeholder="Enter your password"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          icon="password"
+        />
+      </View>
+
+      <View style={styles.btnSpacing} />
+
+      <AuthButton
+        title="Sign Up"
+        variant="signup"
+        onPress={handleSignup}
+        loading={loading}
+      />
+
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>Already have an account? </Text>
+        <TouchableOpacity onPress={handleSwitchToLogin}>
+          <Text style={styles.switchText}>Sign In</Text>
+        </TouchableOpacity>
+      </View>
+    </AuthCard>
+  );
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -121,18 +174,7 @@ export default function SignupScreen() {
         <View style={styles.desktopLayout}>
           {renderLeftPanel()}
           <View style={styles.rightPanel}>
-            <AuthCard
-              type="signup"
-              fullName={fullName}
-              setFullName={setFullName}
-              email={email}
-              setEmail={setEmail}
-              password={password}
-              setPassword={setPassword}
-              loading={loading}
-              onSubmit={handleSignup}
-              onSwitch={handleSwitchToLogin}
-            />
+            {renderCardContent()}
           </View>
         </View>
       ) : (
@@ -145,18 +187,7 @@ export default function SignupScreen() {
             <Text style={styles.mobileTitle}>VisionGuard</Text>
             <Text style={styles.mobileSubtitle}>Create security account</Text>
           </View>
-          <AuthCard
-            type="signup"
-            fullName={fullName}
-            setFullName={setFullName}
-            email={email}
-            setEmail={setEmail}
-            password={password}
-            setPassword={setPassword}
-            loading={loading}
-            onSubmit={handleSignup}
-            onSwitch={handleSwitchToLogin}
-          />
+          {renderCardContent()}
         </ScrollView>
       )}
     </KeyboardAvoidingView>
@@ -266,5 +297,38 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#64748b',
     marginTop: 4,
+  },
+  cardTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#151717',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  cardSubtitle: {
+    fontSize: 15,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  formGap: {
+    gap: 16,
+  },
+  btnSpacing: {
+    height: 24,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  footerText: {
+    color: '#555',
+    fontSize: 14,
+  },
+  switchText: {
+    color: '#2d79f3',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });
