@@ -1,6 +1,56 @@
 # Welcome to your Expo app 👋
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+## Project Structure
+
+```text
+VisionGuard-frontend/
+├── app/
+│   ├── (auth)/                  # Auth group (no header)
+│   │   ├── login.tsx
+│   │   ├── signup.tsx
+│   │   └── _layout.tsx
+│   ├── (tabs)/                  # Main app after login (bottom tabs)
+│   │   ├── dashboard.tsx
+│   │   ├── cameras.tsx
+│   │   ├── alerts.tsx
+│   │   └── _layout.tsx
+│   ├── _layout.tsx              # Root layout
+│   └── index.tsx                # Entry point (redirect logic)
+│
+├── components/
+│   ├── ui/                      # Reusable UI components
+│   │   ├── Button.tsx
+│   │   ├── Input.tsx
+│   │   ├── Card.tsx
+│   │   └── LoadingSpinner.tsx
+│   ├── auth/
+│   │   └── AuthHeader.tsx
+│   └── common/
+│       └── Header.tsx
+│
+├── constants/
+│   └── Colors.ts
+│
+├── hooks/
+│   └── useAuth.ts
+│
+├── services/
+│   └── api.ts                   # Axios instance + auth
+│
+├── types/
+│   └── index.ts                 # Global TypeScript types
+│
+├── utils/
+│   └── storage.ts               # AsyncStorage helper
+│
+├── assets/
+│   └── images/
+│
+├── app.json
+├── package.json
+└── tsconfig.json
+```
 
 ## Get started
 
