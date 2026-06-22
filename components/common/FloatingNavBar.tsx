@@ -43,7 +43,7 @@ export default function FloatingNavBar() {
             >
               <item.icon 
                 size={20} 
-                color={isActive ? "#ffffff" : "#cbd5e1"} 
+                color="#00000060" 
                 strokeWidth={2.2}
               />
               <View style={[
@@ -68,7 +68,7 @@ export default function FloatingNavBar() {
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    bottom: 35, 
+    bottom: 35,
     left: 0,
     right: 0,
     alignItems: 'center',
@@ -76,20 +76,32 @@ const styles = StyleSheet.create({
   },
   nav: {
     flexDirection: 'row',
-    // Ultra glossy translucent background
-    backgroundColor: Platform.OS === 'web' ? 'rgba(255, 255, 255, 0.07)' : 'rgba(15, 23, 42, 0.85)',
-    // @ts-ignore
-    backdropFilter: Platform.OS === 'web' ? 'blur(30px) saturate(210%)' : undefined,
-    borderWidth: 1,
-    // Lighter, more reflecting border for glass effect
-    borderColor: Platform.OS === 'web' ? 'rgba(255, 255, 255, 0.22)' : 'rgba(255, 255, 255, 0.08)',
     borderRadius: 999,
     padding: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.25,
-    shadowRadius: 25,
+    borderWidth: 1,
     elevation: 20,
+    
+    ...Platform.select({
+      web: {
+        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 100%)',
+        backdropFilter: 'blur(30px) saturate(220%)',
+        borderColor: 'rgba(255, 255, 255, 0.28)',
+        boxShadow: `
+          inset 0 16px 16px -12px rgba(255, 255, 255, 0.4),
+          inset 0 2px 3px rgba(255, 255, 255, 0.3),
+          inset 0 -2px 3px rgba(0, 0, 0, 0.15),
+          0 16px 36px rgba(0, 0, 0, 0.3)
+        `,
+      } as any,
+      default: {
+        backgroundColor: 'rgba(15, 23, 42, 0.85)',
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.25,
+        shadowRadius: 25,
+      },
+    }),
   },
   navItem: {
     flexDirection: 'row',
@@ -98,24 +110,43 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 999,
     marginHorizontal: 4,
-    // Add transition effect on web
+    borderWidth: 1,
+    borderColor: 'transparent',
+    
     ...Platform.select({
       web: {
-        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
       } as any,
     }),
   },
   activeNavItem: {
-    backgroundColor: PRIMARY_COLOR,
-    // Subtle inner shadow glow
     ...Platform.select({
       web: {
-        boxShadow: '0 4px 12px rgba(31, 178, 197, 0.35)',
+        background: 'linear-gradient(135deg, #1fb2c5 0%, #1d4585 100%)',
+        borderColor: 'rgba(255, 255, 255, 0.25)',
+        boxShadow: `
+          inset 0 8px 8px -4px rgba(255, 255, 255, 0.45),
+          inset 0 1px 2px rgba(255, 255, 255, 0.3),
+          0 6px 20px rgba(31, 178, 197, 0.45)
+        `,
       } as any,
+      default: {
+        color:"white",
+        backgroundColor: PRIMARY_COLOR,
+      },
     }),
   },
   hoveredNavItem: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    ...Platform.select({
+      web: {
+        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%)',
+        borderColor: 'rgba(255, 255, 255, 0.18)',
+        boxShadow: 'inset 0 4px 6px -3px rgba(255, 255, 255, 0.25)',
+      } as any,
+      default: {
+        backgroundColor: 'rgba(255, 255, 255, 0.15)',
+      },
+    }),
   },
   labelContainer: {
     overflow: 'hidden',
@@ -123,12 +154,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...Platform.select({
       web: {
-        transition: 'max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease, margin-left 0.3s ease',
+        transition: 'max-width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease, margin-left 0.5s ease',
       } as any,
     }),
   },
   labelContainerVisible: {
-    maxWidth: 100, // Safe maximum width for item names
+    maxWidth: 130,
     opacity: 1,
     marginLeft: 8,
   },
@@ -140,13 +171,13 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#cbd5e1',
+    color: '#000000a2',
   },
   activeLabel: {
-    color: '#ffffff',
-    fontWeight: '700',
+    color: '#0000008c',
+    fontWeight: '600',
   },
   hoveredLabel: {
-    color: '#ffffff',
+    color: '#000000a2',
   },
 });
