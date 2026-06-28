@@ -1,6 +1,8 @@
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Platform } from 'react-native';
+import '../global.css';
+
 
 let GoeyToaster: any = null;
 try {
