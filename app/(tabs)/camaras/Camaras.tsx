@@ -8,10 +8,14 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  Image,
+  Platform,
 } from 'react-native';
-import { Plus, Play, Camera as CameraIcon } from 'lucide-react-native';
+import { Plus, Camera as CameraIcon } from 'lucide-react-native';
 import { api } from '../../../services/api';
 import FloatingNavBar from '../../../components/common/FloatingNavBar';
+
+const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000';
 
 interface Camera {
   id: string;
@@ -50,48 +54,37 @@ export default function CamarasScreen() {
     fetchCameras();
   };
 
-  const startDetection = (camera: Camera) => {
-    Alert.alert(
-      "Start Detection",
-      `Start vehicle detection on ${camera.name}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Start", onPress: () => console.log(`Starting detection on ${camera.id}`) }
-      ]
-    );
-  };
+  const renderCamera = ({ item }: { item: Camera }) => {
+    // Generate a unique cache buster for feed reloads
+    const feedUri = `${BASE_URL}/cameras/${item.id}/feed?t=${Date.now()}`;
 
-  const renderCamera = ({ item }: { item: Camera }) => (
-    <View style={styles.cameraCard}>
-      <View style={styles.cameraHeader}>
-        <View style={styles.iconContainer}>
-          <CameraIcon size={28} color="#0ea5e9" />
+    return (
+      <View style={styles.cameraCard}>
+        <View style={styles.feedPreview}>
+          <Image
+            source={{ uri: feedUri }}
+            style={styles.feedImage}
+            resizeMode="cover"
+          />
+          <View style={[
+            styles.statusBadge,
+            { backgroundColor: item.status === 'online' ? '#22c55e' : '#ef4444' }
+          ]}>
+            <Text style={styles.statusText}>
+              {item.status.toUpperCase()}
+            </Text>
+          </View>
         </View>
+
         <View style={styles.cameraInfo}>
-          <Text style={styles.cameraName}>{item.name}</Text>
-          <Text style={styles.cameraType}>
+          <Text numberOfLines={1} style={styles.cameraName}>{item.name}</Text>
+          <Text numberOfLines={1} style={styles.cameraType}>
             {item.type.toUpperCase()} • {item.location || 'Unknown'}
           </Text>
         </View>
-        <View style={[
-          styles.statusBadge,
-          { backgroundColor: item.status === 'online' ? '#22c55e' : '#ef4444' }
-        ]}>
-          <Text style={styles.statusText}>
-            {item.status.toUpperCase()}
-          </Text>
-        </View>
       </View>
-
-      <TouchableOpacity 
-        style={styles.startButton}
-        onPress={() => startDetection(item)}
-      >
-        <Play size={18} color="#fff" />
-        <Text style={styles.startButtonText}>Start Detection</Text>
-      </TouchableOpacity>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -106,6 +99,8 @@ export default function CamarasScreen() {
         data={cameras}
         keyExtractor={(item) => item.id}
         renderItem={renderCamera}
+        numColumns={3}
+        columnWrapperStyle={styles.row}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -146,70 +141,68 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   listContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingBottom: 100,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
   },
   cameraCard: {
     backgroundColor: 'white',
     borderRadius: 16,
-    padding: 16,
+    padding: 12,
     marginBottom: 16,
+    flex: 1,
+    maxWidth: '31.3%',
+    marginHorizontal: '1%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 5,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
-  cameraHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  iconContainer: {
-    width: 50,
-    height: 50,
+  feedPreview: {
+    height: 110,
+    backgroundColor: '#e2e8f0',
     borderRadius: 12,
-    backgroundColor: '#f0f9ff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: 'relative',
+    marginBottom: 12,
+    overflow: 'hidden',
   },
-  cameraInfo: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  cameraName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1e2937',
-  },
-  cameraType: {
-    fontSize: 14,
-    color: '#64748b',
-    marginTop: 2,
+  feedImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#000000',
   },
   statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 999,
   },
   statusText: {
     color: 'white',
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '700',
   },
-  startButton: {
-    backgroundColor: '#0ea5e9',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 14,
-    borderRadius: 12,
-    gap: 8,
+  cameraInfo: {
+    marginBottom: 4,
+    paddingHorizontal: 2,
   },
-  startButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 16,
+  cameraName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  cameraType: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
   },
   emptyContainer: {
     alignItems: 'center',
