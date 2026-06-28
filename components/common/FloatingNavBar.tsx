@@ -6,7 +6,7 @@ import { useRouter, usePathname } from 'expo-router';
 
 const navItems = [
   { name: 'Dashboard', icon: Home, route: '/(tabs)/dashboard' },
-  { name: 'Cameras', icon: Camera, route: '/(tabs)/cameras/Camaras' },
+  { name: 'Cameras', icon: Camera, route: '/(tabs)/camaras/Camaras' },
   { name: 'Alerts', icon: Bell, route: '/(tabs)/alerts' },
   { name: 'Profile', icon: User, route: '/(tabs)/profile' },
 ];
