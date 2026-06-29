@@ -5,10 +5,10 @@ import { Home, Camera, Bell, User } from 'lucide-react-native';
 import { useRouter, usePathname } from 'expo-router';
 
 const navItems = [
-  { name: 'Dashboard', icon: Home, route: '/(tabs)/dashboard' },
-  { name: 'Cameras', icon: Camera, route: '/(tabs)/camaras/Camaras' },
-  { name: 'Alerts', icon: Bell, route: '/(tabs)/alerts' },
-  { name: 'Profile', icon: User, route: '/(tabs)/profile' },
+  { name: 'Dashboard', icon: Home, route: '/(tabs)/dashboard', match: 'dashboard' },
+  { name: 'Cameras', icon: Camera, route: '/(tabs)/camaras/Camaras', match: 'camaras' },
+  { name: 'Alerts', icon: Bell, route: '/(tabs)/alerts', match: 'alerts' },
+  { name: 'Profile', icon: User, route: '/(tabs)/profile', match: 'profile' },
 ];
 
 const PRIMARY_COLOR = '#1fb2c5';
@@ -22,8 +22,7 @@ export default function FloatingNavBar() {
     <View style={styles.wrapper}>
       <View style={styles.nav}>
         {navItems.map((item, index) => {
-          const isActive = pathname === item.route || 
-                          (pathname.includes('dashboard') && item.name === 'Dashboard');
+          const isActive = pathname === item.route || pathname.includes(item.match);
           const isHovered = hoveredIndex === index;
           const showLabel = isActive || isHovered;
 
