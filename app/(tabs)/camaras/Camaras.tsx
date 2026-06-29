@@ -14,6 +14,7 @@ import {
 import { Plus, Video, Radio, Shield, MapPin, RefreshCw } from 'lucide-react-native';
 import { api } from '../../../services/api';
 import FloatingNavBar from '../../../components/common/FloatingNavBar';
+import LoadingAnimation from '../../../components/common/LoadingAnimation';
 
 const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000';
 
@@ -31,6 +32,22 @@ export default function CamarasScreen() {
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [minTimeDone, setMinTimeDone] = useState(false);
+  const [fetchDone, setFetchDone] = useState(false);
+
+  // Start a 2-second minimum timer on mount
+  useEffect(() => {
+    const timer = setTimeout(() => setMinTimeDone(true), 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Hide loading only when BOTH the min 2s AND fetch are done,
+  // AND cameras actually loaded (keep loading if feed is empty/failed)
+  useEffect(() => {
+    if (minTimeDone && fetchDone && cameras.length > 0) {
+      setLoading(false);
+    }
+  }, [minTimeDone, fetchDone, cameras]);
 
   const fetchCameras = async () => {
     try {
@@ -40,7 +57,7 @@ export default function CamarasScreen() {
       console.error(error);
       Alert.alert('Error', 'Failed to load cameras');
     } finally {
-      setLoading(false);
+      setFetchDone(true);
       setRefreshing(false);
     }
   };
@@ -111,46 +128,54 @@ export default function CamarasScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.subtitle}>System Feeds</Text>
-          <Text style={styles.title}>Camera Network</Text>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <LoadingAnimation />
         </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
-            <RefreshCw size={18} color="#475569" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.addButton}>
-            <Plus size={18} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <FlatList
-        data={cameras}
-        keyExtractor={(item) => item.id}
-        renderItem={renderCamera}
-        numColumns={3}
-        columnWrapperStyle={styles.gridRow}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
-            onRefresh={onRefresh} 
-            tintColor="#1fb2c5"
-            colors={['#1fb2c5']}
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Video size={44} color="#64748b" strokeWidth={1.5} />
-            <Text style={styles.emptyText}>No Active Feeds Found</Text>
-            <Text style={styles.emptySubtext}>Please connect a local webcam or refresh to search for feeds.</Text>
+      ) : (
+        <>
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.subtitle}>System Feeds</Text>
+              <Text style={styles.title}>Camera Network</Text>
+            </View>
+            <View style={styles.headerActions}>
+              <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
+                <RefreshCw size={18} color="#475569" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.addButton}>
+                <Plus size={18} color="#fff" />
+              </TouchableOpacity>
+            </View>
           </View>
-        }
-      />
 
-      <FloatingNavBar />
+          <FlatList
+            data={cameras}
+            keyExtractor={(item) => item.id}
+            renderItem={renderCamera}
+            numColumns={3}
+            columnWrapperStyle={styles.gridRow}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl 
+                refreshing={refreshing} 
+                onRefresh={onRefresh} 
+                tintColor="#1fb2c5"
+                colors={['#1fb2c5']}
+              />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Video size={44} color="#64748b" strokeWidth={1.5} />
+                <Text style={styles.emptyText}>No Active Feeds Found</Text>
+                <Text style={styles.emptySubtext}>Please connect a local webcam or refresh to search for feeds.</Text>
+              </View>
+            }
+          />
+
+          <FloatingNavBar />
+        </>
+      )}
     </View>
   );
 }
@@ -158,7 +183,13 @@ export default function CamarasScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc', 
+    backgroundColor: '#f8fafc',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
   },
   header: {
     flexDirection: 'row',
