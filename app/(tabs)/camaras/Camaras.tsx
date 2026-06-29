@@ -35,14 +35,11 @@ export default function CamarasScreen() {
   const [minTimeDone, setMinTimeDone] = useState(false);
   const [fetchDone, setFetchDone] = useState(false);
 
-  // Start a 2-second minimum timer on mount
   useEffect(() => {
     const timer = setTimeout(() => setMinTimeDone(true), 2000);
     return () => clearTimeout(timer);
   }, []);
 
-  // Hide loading only when BOTH the min 2s AND fetch are done,
-  // AND cameras actually loaded (keep loading if feed is empty/failed)
   useEffect(() => {
     if (minTimeDone && fetchDone && cameras.length > 0) {
       setLoading(false);
