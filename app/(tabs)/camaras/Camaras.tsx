@@ -15,6 +15,7 @@ import { Plus, Video, Radio, Shield, MapPin, RefreshCw } from 'lucide-react-nati
 import { api } from '../../../services/api';
 import FloatingNavBar from '../../../components/common/FloatingNavBar';
 import LoadingAnimation from '../../../components/common/LoadingAnimation';
+import InfoTooltip from '../../../components/common/InfoTooltip';
 
 const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000';
 
@@ -164,8 +165,11 @@ export default function CamarasScreen() {
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Video size={44} color="#64748b" strokeWidth={1.5} />
-                <Text style={styles.emptyText}>No Active Feeds Found</Text>
-                <Text style={styles.emptySubtext}>Please connect a local webcam or refresh to search for feeds.</Text>
+                <Text style={styles.emptyText}>No Cameras Connected</Text>
+                <Text style={styles.emptySubtext}>Connect a local webcam or add a camera feed to get started.</Text>
+                <View style={styles.emptyTooltipRow}>
+                  <InfoTooltip message="No cameras are currently connected. Please connect a webcam or configure a camera feed and refresh." />
+                </View>
               </View>
             }
           />
@@ -391,5 +395,10 @@ const styles = StyleSheet.create({
     color: '#64748b',
     textAlign: 'center',
     lineHeight: 18,
+  },
+  emptyTooltipRow: {
+    marginTop: 20,
+    alignItems: 'center',
+    zIndex: 10,
   },
 });
