@@ -76,7 +76,7 @@ export default function SignupScreen() {
       });
       console.log('Registration successful:', response.data);
       triggerToast('success', 'Success', 'Account created successfully! Please sign in.');
-      router.push('/login');
+      router.push('/(auth)/login');
     } catch (error: any) {
       console.error(error);
       triggerToast(
@@ -90,7 +90,7 @@ export default function SignupScreen() {
   };
 
   const handleSwitchToLogin = () => {
-    router.push('/login');
+    router.push('/(auth)/login');
   };
 
   const renderLeftPanel = () => (
