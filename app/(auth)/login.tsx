@@ -81,7 +81,7 @@ export default function LoginScreen() {
   };
 
   const handleSwitchToSignup = () => {
-    router.push('/signup');
+    router.push('/(auth)/signup');
   };
 
   const renderLeftPanel = () => (
