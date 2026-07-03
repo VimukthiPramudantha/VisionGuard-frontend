@@ -1,5 +1,5 @@
 // app/(tabs)/Settings/settings.tsx
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,9 @@ import {
   Switch,
   Alert,
   Platform,
+  Animated,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
 import {
   User,
@@ -16,7 +19,7 @@ import {
   Shield,
   Camera,
   LogOut,
-  ChevronRight,
+  ChevronDown,
   Edit2,
   Lock,
   Bell,
@@ -24,12 +27,16 @@ import {
   Monitor,
   Sliders,
   Save,
-  Info,
+  Smartphone,
 } from 'lucide-react-native';
 import FloatingNavBar from '../../../components/common/FloatingNavBar';
 
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 const PRIMARY = '#1fb2c5';
-const PRIMARY_DARK = '#178a99';
 const DARK = '#0f172a';
 const DARK_CARD = '#1e293b';
 const SURFACE = '#ffffff';
@@ -40,12 +47,49 @@ const TEXT_MUTED = '#94a3b8';
 const BORDER = '#e2e8f0';
 const DANGER = '#ef4444';
 
+type SectionKey = 'account' | 'security' | 'camera' | null;
+
 export default function SettingsScreen() {
+  const [openSection, setOpenSection] = useState<SectionKey>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [autoSaveSnapshots, setAutoSaveSnapshots] = useState(true);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [alertSensitivity, setAlertSensitivity] = useState<'Low' | 'Medium' | 'High'>('Medium');
   const [detectionConfidence, setDetectionConfidence] = useState(45);
+
+  // Animated rotation values for each section chevron
+  const accountRotation = useRef(new Animated.Value(0)).current;
+  const securityRotation = useRef(new Animated.Value(0)).current;
+  const cameraRotation = useRef(new Animated.Value(0)).current;
+
+  const rotationMap: Record<string, Animated.Value> = {
+    account: accountRotation,
+    security: securityRotation,
+    camera: cameraRotation,
+  };
+
+  const toggleSection = (key: SectionKey) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+
+    // Close all chevrons first
+    Object.entries(rotationMap).forEach(([k, anim]) => {
+      if (k !== key) {
+        Animated.timing(anim, { toValue: 0, duration: 250, useNativeDriver: true }).start();
+      }
+    });
+
+    if (openSection === key) {
+      // Close current
+      Animated.timing(rotationMap[key!], { toValue: 0, duration: 250, useNativeDriver: true }).start();
+      setOpenSection(null);
+    } else {
+      // Open new
+      if (key) {
+        Animated.timing(rotationMap[key], { toValue: 1, duration: 250, useNativeDriver: true }).start();
+      }
+      setOpenSection(key);
+    }
+  };
 
   const handleEditProfile = () => {
     Alert.alert('Edit Profile', 'Profile editing will be available soon.');
@@ -66,66 +110,87 @@ export default function SettingsScreen() {
     });
   };
 
-  const sensitivityColor = {
+  const sensitivityColor: Record<string, string> = {
     Low: '#22c55e',
     Medium: '#f59e0b',
     High: '#ef4444',
   };
 
-  /* ─── Sub-components ─── */
-
-  const SectionHeader = ({
-    title,
-    icon,
-    iconBg,
-  }: {
-    title: string;
-    icon: React.ReactNode;
-    iconBg: string;
-  }) => (
-    <View style={styles.sectionHeaderRow}>
-      <View style={[styles.sectionIconPill, { backgroundColor: iconBg + '18' }]}>{icon}</View>
-      <Text style={styles.sectionHeaderText}>{title}</Text>
-    </View>
-  );
-
+  /* ─── Reusable option row ─── */
   const OptionRow = ({
     label,
+    icon,
+    description,
     value,
     onPress,
     rightElement,
-    icon,
-    description,
+    isLast,
   }: {
     label: string;
+    icon: React.ReactNode;
+    description?: string;
     value?: string;
     onPress?: () => void;
     rightElement?: React.ReactNode;
-    icon?: React.ReactNode;
-    description?: string;
+    isLast?: boolean;
   }) => (
     <TouchableOpacity
       activeOpacity={onPress ? 0.6 : 1}
       onPress={onPress}
-      style={styles.optionRow}
+      style={[styles.optionRow, isLast && styles.optionRowLast]}
     >
-      <View style={styles.optionLeft}>
-        {icon && <View style={styles.optionIcon}>{icon}</View>}
-        <View style={styles.optionTextBlock}>
-          <Text style={styles.optionLabel}>{label}</Text>
-          {description && <Text style={styles.optionDescription}>{description}</Text>}
-        </View>
+      <View style={styles.optionIcon}>{icon}</View>
+      <View style={styles.optionTextBlock}>
+        <Text style={styles.optionLabel}>{label}</Text>
+        {description && <Text style={styles.optionDescription}>{description}</Text>}
       </View>
-      <View style={styles.optionRight}>
-        {value && <Text style={styles.optionValue}>{value}</Text>}
-        {rightElement}
-        {onPress && !rightElement && <ChevronRight size={18} color={TEXT_MUTED} />}
-      </View>
+      {value && <Text style={styles.optionValue}>{value}</Text>}
+      {rightElement}
     </TouchableOpacity>
   );
 
-  /* ─── Confidence Stepper ─── */
+  /* ─── Accordion header ─── */
+  const AccordionHeader = ({
+    sectionKey,
+    title,
+    subtitle,
+    icon,
+    iconBg,
+  }: {
+    sectionKey: SectionKey;
+    title: string;
+    subtitle: string;
+    icon: React.ReactNode;
+    iconBg: string;
+  }) => {
+    const isOpen = openSection === sectionKey;
+    const rotation = sectionKey ? rotationMap[sectionKey] : new Animated.Value(0);
+    const spin = rotation.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['0deg', '180deg'],
+    });
 
+    return (
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => toggleSection(sectionKey)}
+        style={[styles.accordionHeader, isOpen && styles.accordionHeaderOpen]}
+      >
+        <View style={[styles.accordionIconPill, { backgroundColor: iconBg + '15' }]}>
+          {icon}
+        </View>
+        <View style={styles.accordionTextBlock}>
+          <Text style={styles.accordionTitle}>{title}</Text>
+          <Text style={styles.accordionSubtitle}>{subtitle}</Text>
+        </View>
+        <Animated.View style={{ transform: [{ rotate: spin }] }}>
+          <ChevronDown size={20} color={TEXT_MUTED} strokeWidth={2.2} />
+        </Animated.View>
+      </TouchableOpacity>
+    );
+  };
+
+  /* ─── Confidence Stepper ─── */
   const ConfidenceStepper = () => (
     <View style={styles.stepperContainer}>
       <View style={styles.stepperRow}>
@@ -135,19 +200,12 @@ export default function SettingsScreen() {
         >
           <Text style={styles.stepperBtnText}>−</Text>
         </TouchableOpacity>
-
         <View style={styles.stepperValueContainer}>
           <Text style={styles.stepperValue}>{detectionConfidence}%</Text>
           <View style={styles.stepperBar}>
-            <View
-              style={[
-                styles.stepperBarFill,
-                { width: `${detectionConfidence}%` },
-              ]}
-            />
+            <View style={[styles.stepperBarFill, { width: `${detectionConfidence}%` }]} />
           </View>
         </View>
-
         <TouchableOpacity
           style={styles.stepperBtn}
           onPress={() => setDetectionConfidence((p) => Math.min(100, p + 5))}
@@ -158,14 +216,13 @@ export default function SettingsScreen() {
     </View>
   );
 
-  /* ─── RENDER ─── */
-
+  /* ═══════════ RENDER ═══════════ */
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+
         {/* ═══════════ PROFILE HEADER ═══════════ */}
         <View style={styles.profileHeader}>
-          {/* Decorative arcs */}
           <View style={styles.headerDecorArc1} />
           <View style={styles.headerDecorArc2} />
 
@@ -173,11 +230,11 @@ export default function SettingsScreen() {
             <TouchableOpacity style={styles.avatarOuter} onPress={handleEditProfile}>
               <View style={styles.avatarGlowRing}>
                 <View style={styles.avatar}>
-                  <User size={48} color="#fff" strokeWidth={1.8} />
+                  <User size={44} color="#fff" strokeWidth={1.8} />
                 </View>
               </View>
               <View style={styles.editBadge}>
-                <Edit2 size={13} color="#fff" strokeWidth={2.5} />
+                <Edit2 size={12} color="#fff" strokeWidth={2.5} />
               </View>
             </TouchableOpacity>
 
@@ -198,155 +255,153 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* spacer between dark header and cards */}
-        <View style={styles.cardZone}>
-          {/* ═══════════ ACCOUNT SETTINGS ═══════════ */}
-          <View style={styles.sectionCard}>
-            <SectionHeader
+        {/* ═══════════ ACCORDION SECTIONS ═══════════ */}
+        <View style={styles.accordionZone}>
+
+          {/* ── Account Settings ── */}
+          <View style={styles.accordionCard}>
+            <AccordionHeader
+              sectionKey="account"
               title="Account Settings"
-              icon={<Settings size={18} color={PRIMARY} strokeWidth={2.2} />}
+              subtitle="Notifications, preferences & app config"
+              icon={<Settings size={20} color={PRIMARY} strokeWidth={2} />}
               iconBg={PRIMARY}
             />
-
-            <OptionRow
-              label="Change Password"
-              icon={<Lock size={16} color={TEXT_SECONDARY} />}
-              description="Last changed 30 days ago"
-              onPress={() => {}}
-            />
-            <OptionRow
-              label="Email Notifications"
-              icon={<Bell size={16} color={TEXT_SECONDARY} />}
-              description="Alerts, reports & updates"
-              rightElement={
-                <Switch
-                  value={notificationsEnabled}
-                  onValueChange={setNotificationsEnabled}
-                  trackColor={{ false: '#cbd5e1', true: PRIMARY }}
-                  thumbColor={notificationsEnabled ? '#fff' : '#f8fafc'}
+            {openSection === 'account' && (
+              <View style={styles.accordionBody}>
+                <OptionRow
+                  label="Notifications"
+                  icon={<Bell size={16} color={TEXT_SECONDARY} />}
+                  description="Push alerts, reports & updates"
+                  rightElement={
+                    <Switch
+                      value={notificationsEnabled}
+                      onValueChange={setNotificationsEnabled}
+                      trackColor={{ false: '#cbd5e1', true: PRIMARY }}
+                      thumbColor={notificationsEnabled ? '#fff' : '#f8fafc'}
+                    />
+                  }
                 />
-              }
-            />
+                <OptionRow
+                  label="App Settings"
+                  icon={<Smartphone size={16} color={TEXT_SECONDARY} />}
+                  description="Language, theme & display"
+                  onPress={() => Alert.alert('App Settings', 'Coming soon.')}
+                  isLast
+                />
+              </View>
+            )}
           </View>
 
-          {/* ═══════════ SECURITY & PRIVACY ═══════════ */}
-          <View style={styles.sectionCard}>
-            <SectionHeader
+          {/* ── Security & Privacy ── */}
+          <View style={styles.accordionCard}>
+            <AccordionHeader
+              sectionKey="security"
               title="Security & Privacy"
-              icon={<Shield size={18} color="#8b5cf6" strokeWidth={2.2} />}
+              subtitle="Authentication, sessions & access control"
+              icon={<Shield size={20} color="#8b5cf6" strokeWidth={2} />}
               iconBg="#8b5cf6"
             />
-
-            <OptionRow
-              label="Two-Factor Authentication"
-              icon={<Shield size={16} color={TEXT_SECONDARY} />}
-              description={twoFactorEnabled ? 'Enabled — authenticator app' : 'Disabled — enable for extra security'}
-              rightElement={
-                <Switch
-                  value={twoFactorEnabled}
-                  onValueChange={setTwoFactorEnabled}
-                  trackColor={{ false: '#cbd5e1', true: '#8b5cf6' }}
-                  thumbColor={twoFactorEnabled ? '#fff' : '#f8fafc'}
+            {openSection === 'security' && (
+              <View style={styles.accordionBody}>
+                <OptionRow
+                  label="Two-Factor Authentication"
+                  icon={<Lock size={16} color={TEXT_SECONDARY} />}
+                  description={twoFactorEnabled ? 'Enabled — authenticator app' : 'Disabled — tap to enable'}
+                  rightElement={
+                    <Switch
+                      value={twoFactorEnabled}
+                      onValueChange={setTwoFactorEnabled}
+                      trackColor={{ false: '#cbd5e1', true: '#8b5cf6' }}
+                      thumbColor={twoFactorEnabled ? '#fff' : '#f8fafc'}
+                    />
+                  }
                 />
-              }
-            />
-            <OptionRow
-              label="Login History"
-              icon={<Clock size={16} color={TEXT_SECONDARY} />}
-              description="View recent account activity"
-              onPress={() => {}}
-            />
-            <OptionRow
-              label="Logout from All Devices"
-              icon={<Monitor size={16} color={TEXT_SECONDARY} />}
-              description="End all other active sessions"
-              onPress={() => {}}
-            />
+                <OptionRow
+                  label="Login History"
+                  icon={<Clock size={16} color={TEXT_SECONDARY} />}
+                  description="View recent account activity"
+                  onPress={() => Alert.alert('Login History', 'Coming soon.')}
+                />
+                <OptionRow
+                  label="Logout from All Devices"
+                  icon={<Monitor size={16} color={TEXT_SECONDARY} />}
+                  description="End all other active sessions"
+                  onPress={() =>
+                    Alert.alert('Logout All', 'Are you sure?', [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Confirm', style: 'destructive' },
+                    ])
+                  }
+                  isLast
+                />
+              </View>
+            )}
           </View>
 
-          {/* ═══════════ CAMERA SETTINGS ═══════════ */}
-          <View style={styles.sectionCard}>
-            <SectionHeader
-              title="Camera & Detection"
-              icon={<Camera size={18} color="#f59e0b" strokeWidth={2.2} />}
+          {/* ── Camera Settings ── */}
+          <View style={styles.accordionCard}>
+            <AccordionHeader
+              sectionKey="camera"
+              title="Camera Settings"
+              subtitle="Detection, snapshots & alert tuning"
+              icon={<Camera size={20} color="#f59e0b" strokeWidth={2} />}
               iconBg="#f59e0b"
             />
-
-            <View style={styles.optionRow}>
-              <View style={styles.optionLeft}>
-                <View style={styles.optionIcon}>
-                  <Sliders size={16} color={TEXT_SECONDARY} />
+            {openSection === 'camera' && (
+              <View style={styles.accordionBody}>
+                {/* Confidence row + stepper */}
+                <View style={[styles.optionRow]}>
+                  <View style={styles.optionIcon}>
+                    <Sliders size={16} color={TEXT_SECONDARY} />
+                  </View>
+                  <View style={styles.optionTextBlock}>
+                    <Text style={styles.optionLabel}>Detection Confidence</Text>
+                    <Text style={styles.optionDescription}>Minimum score to trigger an alert</Text>
+                  </View>
                 </View>
-                <View style={styles.optionTextBlock}>
-                  <Text style={styles.optionLabel}>Detection Confidence</Text>
-                  <Text style={styles.optionDescription}>
-                    Minimum score to trigger an alert
-                  </Text>
-                </View>
-              </View>
-            </View>
-            <ConfidenceStepper />
+                <ConfidenceStepper />
 
-            <OptionRow
-              label="Auto-save Snapshots"
-              icon={<Save size={16} color={TEXT_SECONDARY} />}
-              description="Save frames when detections occur"
-              rightElement={
-                <Switch
-                  value={autoSaveSnapshots}
-                  onValueChange={setAutoSaveSnapshots}
-                  trackColor={{ false: '#cbd5e1', true: '#f59e0b' }}
-                  thumbColor={autoSaveSnapshots ? '#fff' : '#f8fafc'}
+                <OptionRow
+                  label="Auto-save Snapshots"
+                  icon={<Save size={16} color={TEXT_SECONDARY} />}
+                  description="Save frames on detection events"
+                  rightElement={
+                    <Switch
+                      value={autoSaveSnapshots}
+                      onValueChange={setAutoSaveSnapshots}
+                      trackColor={{ false: '#cbd5e1', true: '#f59e0b' }}
+                      thumbColor={autoSaveSnapshots ? '#fff' : '#f8fafc'}
+                    />
+                  }
                 />
-              }
-            />
-            <OptionRow
-              label="Alert Sensitivity"
-              icon={<Bell size={16} color={TEXT_SECONDARY} />}
-              description="How aggressively detections are reported"
-              value={alertSensitivity}
-              onPress={cycleAlertSensitivity}
-              rightElement={
-                <View style={styles.sensitivityRow}>
-                  <View
-                    style={[
-                      styles.sensitivityDot,
-                      { backgroundColor: sensitivityColor[alertSensitivity] },
-                    ]}
-                  />
-                  <Text
-                    style={[styles.optionValue, { color: sensitivityColor[alertSensitivity] }]}
-                  >
-                    {alertSensitivity}
-                  </Text>
-                  <ChevronRight size={18} color={TEXT_MUTED} />
-                </View>
-              }
-            />
-          </View>
-
-          {/* ═══════════ ABOUT ═══════════ */}
-          <View style={styles.sectionCard}>
-            <SectionHeader
-              title="About"
-              icon={<Info size={18} color={TEXT_MUTED} strokeWidth={2.2} />}
-              iconBg={TEXT_MUTED}
-            />
-            <OptionRow
-              label="App Version"
-              icon={<Info size={16} color={TEXT_SECONDARY} />}
-              value="1.0.0"
-            />
-            <OptionRow
-              label="Terms of Service"
-              icon={<ChevronRight size={16} color={TEXT_SECONDARY} />}
-              onPress={() => {}}
-            />
-            <OptionRow
-              label="Privacy Policy"
-              icon={<Shield size={16} color={TEXT_SECONDARY} />}
-              onPress={() => {}}
-            />
+                <OptionRow
+                  label="Alert Sensitivity"
+                  icon={<Bell size={16} color={TEXT_SECONDARY} />}
+                  description="How aggressively detections are reported"
+                  onPress={cycleAlertSensitivity}
+                  rightElement={
+                    <View style={styles.sensitivityChip}>
+                      <View
+                        style={[
+                          styles.sensitivityDot,
+                          { backgroundColor: sensitivityColor[alertSensitivity] },
+                        ]}
+                      />
+                      <Text
+                        style={[
+                          styles.sensitivityText,
+                          { color: sensitivityColor[alertSensitivity] },
+                        ]}
+                      >
+                        {alertSensitivity}
+                      </Text>
+                    </View>
+                  }
+                  isLast
+                />
+              </View>
+            )}
           </View>
 
           {/* ═══════════ LOGOUT ═══════════ */}
@@ -364,7 +419,6 @@ export default function SettingsScreen() {
             </View>
           </TouchableOpacity>
 
-          {/* Footer */}
           <Text style={styles.footerText}>VisionGuard • v1.0.0</Text>
         </View>
       </ScrollView>
@@ -377,7 +431,6 @@ export default function SettingsScreen() {
 /* ═══════════════════════════════════════════
  *  STYLES
  * ═══════════════════════════════════════════ */
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -442,9 +495,9 @@ const styles = StyleSheet.create({
     }),
   },
   avatar: {
-    width: 92,
-    height: 92,
-    borderRadius: 46,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     backgroundColor: DARK_CARD,
     alignItems: 'center',
     justifyContent: 'center',
@@ -537,17 +590,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
-  /* ─── Card Zone ─── */
-  cardZone: {
+  /* ─── Accordion Zone ─── */
+  accordionZone: {
     marginTop: -18,
     paddingHorizontal: 16,
   },
 
-  /* ─── Section Cards ─── */
-  sectionCard: {
+  /* ─── Accordion Card ─── */
+  accordionCard: {
     backgroundColor: SURFACE,
     borderRadius: 18,
-    marginBottom: 16,
+    marginBottom: 14,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: BORDER,
@@ -564,43 +617,55 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  sectionHeaderRow: {
+  accordionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 6,
-    gap: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
   },
-  sectionIconPill: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+  accordionHeaderOpen: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: BORDER,
+  },
+  accordionIconPill: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 14,
   },
-  sectionHeaderText: {
+  accordionTextBlock: {
+    flex: 1,
+    marginRight: 8,
+  },
+  accordionTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: TEXT_PRIMARY,
     letterSpacing: -0.2,
+    marginBottom: 2,
+  },
+  accordionSubtitle: {
+    fontSize: 12,
+    color: TEXT_MUTED,
+    lineHeight: 16,
+  },
+  accordionBody: {
+    paddingTop: 4,
   },
 
   /* ─── Option Rows ─── */
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingVertical: 14,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#f1f5f9',
   },
-  optionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    marginRight: 12,
+  optionRowLast: {
+    borderBottomWidth: 0,
   },
   optionIcon: {
     width: 34,
@@ -613,6 +678,7 @@ const styles = StyleSheet.create({
   },
   optionTextBlock: {
     flex: 1,
+    marginRight: 8,
   },
   optionLabel: {
     fontSize: 15,
@@ -625,11 +691,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     lineHeight: 16,
   },
-  optionRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
   optionValue: {
     fontSize: 13,
     fontWeight: '600',
@@ -638,21 +699,31 @@ const styles = StyleSheet.create({
   },
 
   /* ─── Sensitivity ─── */
-  sensitivityRow: {
+  sensitivityChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
     gap: 6,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   sensitivityDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
   },
+  sensitivityText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
 
   /* ─── Confidence Stepper ─── */
   stepperContainer: {
-    paddingHorizontal: 18,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
   },
   stepperRow: {
     flexDirection: 'row',
