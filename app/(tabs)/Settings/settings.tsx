@@ -1,5 +1,5 @@
 // app/(tabs)/Settings/settings.tsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,14 @@ import {
   Switch,
   Alert,
   Platform,
-  Animated,
-  LayoutAnimation,
-  UIManager,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+  interpolate,
+} from 'react-native-reanimated';
 import {
   User,
   Settings,
@@ -31,10 +35,6 @@ import {
 } from 'lucide-react-native';
 import FloatingNavBar from '../../../components/common/FloatingNavBar';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
 const PRIMARY = '#1fb2c5';
 const DARK = '#0f172a';
 const DARK_CARD = '#1e293b';
@@ -46,44 +46,87 @@ const TEXT_MUTED = '#94a3b8';
 const BORDER = '#e2e8f0';
 const DANGER = '#ef4444';
 
-type SectionKey = 'account' | 'security' | 'camera' | null;
+const ANIM_CONFIG = { duration: 350, easing: Easing.bezier(0.4, 0, 0.2, 1) };
+
+type SectionKey = 'account' | 'security' | 'camera';
+
+function AccordionBody({
+  isOpen,
+  children,
+}: {
+  isOpen: boolean;
+  children: React.ReactNode;
+}) {
+  const [contentHeight, setContentHeight] = useState(0);
+  const progress = useSharedValue(0);
+
+  React.useEffect(() => {
+    progress.value = withTiming(isOpen ? 1 : 0, ANIM_CONFIG);
+  }, [isOpen]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const height = interpolate(progress.value, [0, 1], [0, contentHeight || 300]);
+    const opacity = interpolate(progress.value, [0, 0.3, 1], [0, 0, 1]);
+
+    return {
+      height,
+      opacity,
+      overflow: 'hidden' as const,
+    };
+  });
+
+  const innerStyle = useAnimatedStyle(() => {
+    const translateY = interpolate(progress.value, [0, 1], [-10, 0]);
+    return { transform: [{ translateY }] };
+  });
+
+  const onLayout = useCallback((e: any) => {
+    const h = e.nativeEvent.layout.height;
+    if (h > 0) setContentHeight(h);
+  }, []);
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <Animated.View style={innerStyle}>
+        <View
+          onLayout={onLayout}
+          style={contentHeight === 0 ? { position: 'absolute', opacity: 0 } : undefined}
+        >
+          {children}
+        </View>
+      </Animated.View>
+    </Animated.View>
+  );
+}
 
 export default function SettingsScreen() {
-  const [openSection, setOpenSection] = useState<SectionKey>(null);
+  const [openSection, setOpenSection] = useState<SectionKey | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [autoSaveSnapshots, setAutoSaveSnapshots] = useState(true);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [alertSensitivity, setAlertSensitivity] = useState<'Low' | 'Medium' | 'High'>('Medium');
   const [detectionConfidence, setDetectionConfidence] = useState(45);
 
-  const accountRotation = useRef(new Animated.Value(0)).current;
-  const securityRotation = useRef(new Animated.Value(0)).current;
-  const cameraRotation = useRef(new Animated.Value(0)).current;
+  const accountChevron = useSharedValue(0);
+  const securityChevron = useSharedValue(0);
+  const cameraChevron = useSharedValue(0);
 
-  const rotationMap: Record<string, Animated.Value> = {
-    account: accountRotation,
-    security: securityRotation,
-    camera: cameraRotation,
+  const chevronMap: Record<SectionKey, Animated.SharedValue<number>> = {
+    account: accountChevron,
+    security: securityChevron,
+    camera: cameraChevron,
   };
 
   const toggleSection = (key: SectionKey) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-
-    Object.entries(rotationMap).forEach(([k, anim]) => {
-      if (k !== key) {
-        Animated.timing(anim, { toValue: 0, duration: 250, useNativeDriver: true }).start();
-      }
-    });
+    const allKeys: SectionKey[] = ['account', 'security', 'camera'];
 
     if (openSection === key) {
-      
-      Animated.timing(rotationMap[key!], { toValue: 0, duration: 250, useNativeDriver: true }).start();
+      chevronMap[key].value = withTiming(0, ANIM_CONFIG);
       setOpenSection(null);
     } else {
-      
-      if (key) {
-        Animated.timing(rotationMap[key], { toValue: 1, duration: 250, useNativeDriver: true }).start();
-      }
+      allKeys.forEach((k) => {
+        chevronMap[k].value = withTiming(k === key ? 1 : 0, ANIM_CONFIG);
+      });
       setOpenSection(key);
     }
   };
@@ -159,10 +202,9 @@ export default function SettingsScreen() {
     iconBg: string;
   }) => {
     const isOpen = openSection === sectionKey;
-    const rotation = sectionKey ? rotationMap[sectionKey] : new Animated.Value(0);
-    const spin = rotation.interpolate({
-      inputRange: [0, 1],
-      outputRange: ['0deg', '180deg'],
+    const chevronStyle = useAnimatedStyle(() => {
+      const rotate = interpolate(chevronMap[sectionKey].value, [0, 1], [0, 180]);
+      return { transform: [{ rotate: `${rotate}deg` }] };
     });
 
     return (
@@ -178,7 +220,7 @@ export default function SettingsScreen() {
           <Text style={styles.accordionTitle}>{title}</Text>
           <Text style={styles.accordionSubtitle}>{subtitle}</Text>
         </View>
-        <Animated.View style={{ transform: [{ rotate: spin }] }}>
+        <Animated.View style={chevronStyle}>
           <ChevronDown size={20} color={TEXT_MUTED} strokeWidth={2.2} />
         </Animated.View>
       </TouchableOpacity>
@@ -257,7 +299,7 @@ export default function SettingsScreen() {
               icon={<Settings size={20} color={PRIMARY} strokeWidth={2} />}
               iconBg={PRIMARY}
             />
-            {openSection === 'account' && (
+            <AccordionBody isOpen={openSection === 'account'}>
               <View style={styles.accordionBody}>
                 <OptionRow
                   label="Notifications"
@@ -280,9 +322,10 @@ export default function SettingsScreen() {
                   isLast
                 />
               </View>
-            )}
+            </AccordionBody>
           </View>
 
+          {/* ── Security & Privacy ── */}
           <View style={styles.accordionCard}>
             <AccordionHeader
               sectionKey="security"
@@ -291,7 +334,7 @@ export default function SettingsScreen() {
               icon={<Shield size={20} color="#8b5cf6" strokeWidth={2} />}
               iconBg="#8b5cf6"
             />
-            {openSection === 'security' && (
+            <AccordionBody isOpen={openSection === 'security'}>
               <View style={styles.accordionBody}>
                 <OptionRow
                   label="Two-Factor Authentication"
@@ -325,7 +368,7 @@ export default function SettingsScreen() {
                   isLast
                 />
               </View>
-            )}
+            </AccordionBody>
           </View>
 
           <View style={styles.accordionCard}>
@@ -336,10 +379,9 @@ export default function SettingsScreen() {
               icon={<Camera size={20} color="#f59e0b" strokeWidth={2} />}
               iconBg="#f59e0b"
             />
-            {openSection === 'camera' && (
+            <AccordionBody isOpen={openSection === 'camera'}>
               <View style={styles.accordionBody}>
-                
-                <View style={[styles.optionRow]}>
+                <View style={styles.optionRow}>
                   <View style={styles.optionIcon}>
                     <Sliders size={16} color={TEXT_SECONDARY} />
                   </View>
@@ -389,7 +431,7 @@ export default function SettingsScreen() {
                   isLast
                 />
               </View>
-            )}
+            </AccordionBody>
           </View>
 
           <TouchableOpacity
