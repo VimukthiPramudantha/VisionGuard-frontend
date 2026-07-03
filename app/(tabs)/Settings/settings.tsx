@@ -31,7 +31,6 @@ import {
 } from 'lucide-react-native';
 import FloatingNavBar from '../../../components/common/FloatingNavBar';
 
-// Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
@@ -57,7 +56,6 @@ export default function SettingsScreen() {
   const [alertSensitivity, setAlertSensitivity] = useState<'Low' | 'Medium' | 'High'>('Medium');
   const [detectionConfidence, setDetectionConfidence] = useState(45);
 
-  // Animated rotation values for each section chevron
   const accountRotation = useRef(new Animated.Value(0)).current;
   const securityRotation = useRef(new Animated.Value(0)).current;
   const cameraRotation = useRef(new Animated.Value(0)).current;
@@ -71,7 +69,6 @@ export default function SettingsScreen() {
   const toggleSection = (key: SectionKey) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 
-    // Close all chevrons first
     Object.entries(rotationMap).forEach(([k, anim]) => {
       if (k !== key) {
         Animated.timing(anim, { toValue: 0, duration: 250, useNativeDriver: true }).start();
@@ -79,11 +76,11 @@ export default function SettingsScreen() {
     });
 
     if (openSection === key) {
-      // Close current
+      
       Animated.timing(rotationMap[key!], { toValue: 0, duration: 250, useNativeDriver: true }).start();
       setOpenSection(null);
     } else {
-      // Open new
+      
       if (key) {
         Animated.timing(rotationMap[key], { toValue: 1, duration: 250, useNativeDriver: true }).start();
       }
@@ -116,7 +113,6 @@ export default function SettingsScreen() {
     High: '#ef4444',
   };
 
-  /* ─── Reusable option row ─── */
   const OptionRow = ({
     label,
     icon,
@@ -149,7 +145,6 @@ export default function SettingsScreen() {
     </TouchableOpacity>
   );
 
-  /* ─── Accordion header ─── */
   const AccordionHeader = ({
     sectionKey,
     title,
@@ -190,7 +185,6 @@ export default function SettingsScreen() {
     );
   };
 
-  /* ─── Confidence Stepper ─── */
   const ConfidenceStepper = () => (
     <View style={styles.stepperContainer}>
       <View style={styles.stepperRow}>
@@ -216,12 +210,10 @@ export default function SettingsScreen() {
     </View>
   );
 
-  /* ═══════════ RENDER ═══════════ */
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-        {/* ═══════════ PROFILE HEADER ═══════════ */}
         <View style={styles.profileHeader}>
           <View style={styles.headerDecorArc1} />
           <View style={styles.headerDecorArc2} />
@@ -255,10 +247,8 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* ═══════════ ACCORDION SECTIONS ═══════════ */}
         <View style={styles.accordionZone}>
 
-          {/* ── Account Settings ── */}
           <View style={styles.accordionCard}>
             <AccordionHeader
               sectionKey="account"
@@ -293,7 +283,6 @@ export default function SettingsScreen() {
             )}
           </View>
 
-          {/* ── Security & Privacy ── */}
           <View style={styles.accordionCard}>
             <AccordionHeader
               sectionKey="security"
@@ -339,7 +328,6 @@ export default function SettingsScreen() {
             )}
           </View>
 
-          {/* ── Camera Settings ── */}
           <View style={styles.accordionCard}>
             <AccordionHeader
               sectionKey="camera"
@@ -350,7 +338,7 @@ export default function SettingsScreen() {
             />
             {openSection === 'camera' && (
               <View style={styles.accordionBody}>
-                {/* Confidence row + stepper */}
+                
                 <View style={[styles.optionRow]}>
                   <View style={styles.optionIcon}>
                     <Sliders size={16} color={TEXT_SECONDARY} />
@@ -404,7 +392,6 @@ export default function SettingsScreen() {
             )}
           </View>
 
-          {/* ═══════════ LOGOUT ═══════════ */}
           <TouchableOpacity
             style={styles.logoutCard}
             activeOpacity={0.7}
@@ -428,9 +415,6 @@ export default function SettingsScreen() {
   );
 }
 
-/* ═══════════════════════════════════════════
- *  STYLES
- * ═══════════════════════════════════════════ */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -440,7 +424,6 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
 
-  /* ─── Profile Header ─── */
   profileHeader: {
     backgroundColor: DARK,
     paddingTop: 56,
@@ -590,13 +573,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
-  /* ─── Accordion Zone ─── */
   accordionZone: {
     marginTop: -18,
     paddingHorizontal: 16,
   },
 
-  /* ─── Accordion Card ─── */
   accordionCard: {
     backgroundColor: SURFACE,
     borderRadius: 18,
@@ -655,7 +636,6 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
 
-  /* ─── Option Rows ─── */
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -698,7 +678,6 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
 
-  /* ─── Sensitivity ─── */
   sensitivityChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -720,7 +699,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  /* ─── Confidence Stepper ─── */
   stepperContainer: {
     paddingHorizontal: 16,
     paddingBottom: 14,
@@ -770,7 +748,6 @@ const styles = StyleSheet.create({
     backgroundColor: PRIMARY,
   },
 
-  /* ─── Logout ─── */
   logoutCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -813,7 +790,6 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
   },
 
-  /* ─── Footer ─── */
   footerText: {
     textAlign: 'center',
     fontSize: 12,
