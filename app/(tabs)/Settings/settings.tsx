@@ -326,7 +326,6 @@ export default function SettingsScreen() {
             </AccordionBody>
           </View>
 
-          {/* ── Security & Privacy ── */}
           <View style={styles.accordionCard}>
             <AccordionHeader
               sectionKey="security"
