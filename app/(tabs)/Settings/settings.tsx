@@ -16,6 +16,7 @@ import Animated, {
   withTiming,
   Easing,
   interpolate,
+  SharedValue,
 } from 'react-native-reanimated';
 import {
   User,
@@ -111,7 +112,7 @@ export default function SettingsScreen() {
   const securityChevron = useSharedValue(0);
   const cameraChevron = useSharedValue(0);
 
-  const chevronMap: Record<SectionKey, Animated.SharedValue<number>> = {
+  const chevronMap: Record<SectionKey, SharedValue<number>> = {
     account: accountChevron,
     security: securityChevron,
     camera: cameraChevron,
