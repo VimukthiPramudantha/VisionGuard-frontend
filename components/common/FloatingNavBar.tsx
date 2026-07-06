@@ -8,7 +8,7 @@ const navItems = [
   { name: 'Dashboard', icon: Home, route: '/(tabs)/dashboard', match: 'dashboard' },
   { name: 'Cameras', icon: Camera, route: '/(tabs)/camaras/Camaras', match: 'camaras' },
   { name: 'Alerts', icon: Bell, route: '/(tabs)/alerts', match: 'alerts' },
-  { name: 'Profile', icon: User, route: '/(tabs)/profile', match: 'profile' },
+  { name: 'Profile', icon: User, route: '/(tabs)/Settings/settings', match: 'profile' },
 ];
 
 const PRIMARY_COLOR = '#1fb2c5';
