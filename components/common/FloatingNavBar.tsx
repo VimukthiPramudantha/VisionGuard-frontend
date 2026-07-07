@@ -34,6 +34,7 @@ export default function FloatingNavBar() {
                 isActive && styles.activeNavItem,
                 isHovered && !isActive && styles.hoveredNavItem,
               ]}
+              // @ts-ignore
               onPress={() => router.replace(item.route)}
               // @ts-ignore
               onMouseEnter={() => setHoveredIndex(index)}
