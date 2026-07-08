@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Upload, RefreshCw, Users } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import FloatingNavBar from '../../components/common/FloatingNavBar';
+import FloatingNavBar from '../../../components/common/FloatingNavBar';
 
 export default function FaceRecognitionScreen() {
   const [image1, setImage1] = useState<string | null>(null);
