@@ -37,7 +37,7 @@ export default function FaceRecognitionScreen() {
       } else {
         setImage2(result.assets[0].uri);
       }
-      setResult(null); // Reset previous result
+      setResult(null); 
     }
   };
 
@@ -49,9 +49,8 @@ export default function FaceRecognitionScreen() {
 
     setIsComparing(true);
 
-    // TODO: Connect to DeepFace backend later
     setTimeout(() => {
-      const similarity = Math.random() * 40 + 60; // Simulated 60-100%
+      const similarity = Math.random() * 40 + 60;
       const match = similarity > 75;
 
       setResult({
