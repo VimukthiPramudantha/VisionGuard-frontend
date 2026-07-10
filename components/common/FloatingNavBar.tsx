@@ -1,13 +1,14 @@
 // components/common/FloatingNavBar.tsx
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
-import { Home, Camera, Bell, User } from 'lucide-react-native';
+import { Home, Camera, Bell, User, Users } from 'lucide-react-native';
 import { useRouter, usePathname } from 'expo-router';
 
 const navItems = [
   { name: 'Dashboard', icon: Home, route: '/(tabs)/dashboard', match: 'dashboard' },
   { name: 'Cameras', icon: Camera, route: '/(tabs)/camaras/Camaras', match: 'camaras' },
   { name: 'Alerts', icon: Bell, route: '/(tabs)/alerts', match: 'alerts' },
+  { name: 'Face Recog', icon: Users, route: '/(tabs)/Face_recognition', match: 'Face_recognition' },
   { name: 'Profile', icon: User, route: '/(tabs)/Settings/settings', match: 'profile' },
 ];
 

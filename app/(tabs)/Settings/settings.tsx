@@ -33,8 +33,10 @@ import {
   Sliders,
   Save,
   Smartphone,
+  Users,
 } from 'lucide-react-native';
 import FloatingNavBar from '../../../components/common/FloatingNavBar';
+import { useRouter } from 'expo-router';
 
 const PRIMARY = '#1fb2c5';
 const DARK = '#0f172a';
@@ -101,6 +103,7 @@ function AccordionBody({
 }
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const [openSection, setOpenSection] = useState<SectionKey | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [autoSaveSnapshots, setAutoSaveSnapshots] = useState(true);
@@ -336,6 +339,12 @@ export default function SettingsScreen() {
             />
             <AccordionBody isOpen={openSection === 'security'}>
               <View style={styles.accordionBody}>
+                <OptionRow
+                  label="Face Recognition"
+                  icon={<Users size={16} color={TEXT_SECONDARY} />}
+                  description="Manage face recognition profiles"
+                  onPress={() => router.push('/(tabs)/Face_recognition')}
+                />
                 <OptionRow
                   label="Two-Factor Authentication"
                   icon={<Lock size={16} color={TEXT_SECONDARY} />}
