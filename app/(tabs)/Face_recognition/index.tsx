@@ -8,7 +8,9 @@ import {
   Image,
   ScrollView,
   Alert,
+  Platform,
 } from 'react-native';
+import { api } from '../../../services/api';
 import { Upload, RefreshCw, Users } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import FloatingNavBar from '../../../components/common/FloatingNavBar';
@@ -43,25 +45,66 @@ export default function FaceRecognitionScreen() {
 
   const compareFaces = async () => {
     if (!image1 || !image2) {
-      Alert.alert('Error', 'Please upload both images');
+      if (Platform.OS === 'web') {
+        alert('Please upload both images');
+      } else {
+        Alert.alert('Error', 'Please upload both images');
+      }
       return;
     }
 
     setIsComparing(true);
+    setResult(null);
 
-    setTimeout(() => {
-      const similarity = Math.random() * 40 + 60;
-      const match = similarity > 75;
+    try {
+      const formData = new FormData();
+      
+      const appendImage = async (key: string, uri: string) => {
+        if (Platform.OS === 'web') {
+          const response = await fetch(uri);
+          const blob = await response.blob();
+          formData.append(key, blob, `${key}.jpg`);
+        } else {
+          const filename = uri.split('/').pop() || `${key}.jpg`;
+          const match = /\.(\w+)$/.exec(filename);
+          const type = match ? `image/${match[1]}` : `image/jpeg`;
+          formData.append(key, {
+            uri,
+            name: filename,
+            type: type,
+          } as any);
+        }
+      };
 
-      setResult({
-        similarity: Math.round(similarity),
-        match,
-        message: match 
-          ? "Faces match successfully!" 
-          : "Faces do not match.",
+      await appendImage('image1', image1);
+      await appendImage('image2', image2);
+
+      const response = await api.post('/face/compare', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
+
+      if (response.data && response.data.success) {
+        setResult({
+          similarity: response.data.similarity_percentage,
+          match: response.data.match,
+          message: response.data.message || (response.data.match ? "Faces match successfully!" : "Faces do not match."),
+        });
+      } else {
+        throw new Error(response.data?.message || 'Face verification failed');
+      }
+    } catch (error: any) {
+      console.error(error);
+      const errMsg = error.response?.data?.detail || error.message || 'Verification failed';
+      if (Platform.OS === 'web') {
+        alert(errMsg);
+      } else {
+        Alert.alert('Error', errMsg);
+      }
+    } finally {
       setIsComparing(false);
-    }, 1800);
+    }
   };
 
   const resetImages = () => {
