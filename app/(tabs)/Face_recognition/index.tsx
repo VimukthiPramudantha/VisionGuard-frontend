@@ -89,7 +89,7 @@ export default function FaceRecognitionScreen() {
         setResult({
           similarity: response.data.similarity_percentage,
           match: response.data.match,
-          message: response.data.message || (response.data.match ? "Faces match successfully!" : "Faces do not match."),
+          message: response.data.message || (response.data.match ? "Faces match successfully!" : "Faces do not match. plz try again"),
         });
       } else {
         throw new Error(response.data?.message || 'Face verification failed');
