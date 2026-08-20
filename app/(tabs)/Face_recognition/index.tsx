@@ -43,7 +43,6 @@ export default function FaceRecognitionScreen() {
   const cameraRef = useRef<CameraView>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   
-  // Compare Tab State
   const [image1, setImage1] = useState<string | null>(null);
   const [image2, setImage2] = useState<string | null>(null);
   const [isComparing, setIsComparing] = useState(false);
@@ -53,7 +52,6 @@ export default function FaceRecognitionScreen() {
     message: string;
   } | null>(null);
 
-  // Identify Tab State
   const [singleImage, setSingleImage] = useState<string | null>(null);
   const [isIdentifying, setIsIdentifying] = useState(false);
   const [identifyResult, setIdentifyResult] = useState<{
@@ -63,12 +61,10 @@ export default function FaceRecognitionScreen() {
     message: string;
   } | null>(null);
 
-  // Register Tab State
   const [registerName, setRegisterName] = useState('');
   const [registerImage, setRegisterImage] = useState<string | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
 
-  // Database Tab State
   const [dbFaces, setDbFaces] = useState<RegisteredFace[]>([]);
   const [isLoadingDb, setIsLoadingDb] = useState(false);
 
@@ -304,7 +300,6 @@ export default function FaceRecognitionScreen() {
           <Text style={styles.subtitle}>VisionGuard Intelligent Profile DB</Text>
         </View>
 
-        {/* Tab Selection */}
         <View style={styles.tabContainer}>
           <TouchableOpacity 
             style={[styles.tabButton, activeTab === 'identify' && styles.activeTabButton]}
