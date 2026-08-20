@@ -1,5 +1,5 @@
 // app/(tabs)/Face_recognition/index.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,7 @@ import {
   ScanFace 
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import FloatingNavBar from '../../../components/common/FloatingNavBar';
 
 type TabType = 'identify' | 'register' | 'database' | 'compare';
@@ -39,6 +40,8 @@ interface RegisteredFace {
 
 export default function FaceRecognitionScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('identify');
+  const cameraRef = useRef<CameraView>(null);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   
   // Compare Tab State
   const [image1, setImage1] = useState<string | null>(null);
@@ -91,7 +94,7 @@ export default function FaceRecognitionScreen() {
     return api.defaults.baseURL || '';
   };
 
-  const requestCameraPermission = async () => {
+  const requestPickerCameraPermission = async () => {
     if (Platform.OS !== 'web') {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
@@ -107,7 +110,7 @@ export default function FaceRecognitionScreen() {
     let result;
     
     if (source === 'camera') {
-      const hasPermission = await requestCameraPermission();
+      const hasPermission = await requestPickerCameraPermission();
       if (!hasPermission) return;
       result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
@@ -407,53 +410,90 @@ export default function FaceRecognitionScreen() {
           <View style={styles.contentCard}>
             <Text style={styles.cardTitle}>Register New Face</Text>
             <Text style={styles.cardDescription}>
-              Add a person to the database by providing their name and a clear photo of their face.
+              Add a person to the database by capturing a clear photo of their face directly inside the app.
             </Text>
 
-            <Text style={styles.inputLabel}>Full Name</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="e.g. John Doe, Mom, Office Staff"
-              placeholderTextColor="#94a3b8"
-              value={registerName}
-              onChangeText={setRegisterName}
-            />
+            {Platform.OS === 'web' ? (
+              <View style={styles.mobileOnlyContainer}>
+                <Text style={styles.mobileOnlyText}>
+                  📱 Registration is only available on mobile devices to ensure safe and direct in-app camera capture.
+                </Text>
+              </View>
+            ) : !cameraPermission ? (
+              <ActivityIndicator size="large" color="#1e40af" style={{ marginVertical: 20 }} />
+            ) : !cameraPermission.granted ? (
+              <View style={styles.permissionContainer}>
+                <Text style={styles.permissionText}>
+                  Camera permission is required to capture faces inside the app.
+                </Text>
+                <TouchableOpacity style={styles.actionButton} onPress={requestCameraPermission}>
+                  <Text style={styles.actionButtonText}>Grant Camera Permission</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View>
+                <Text style={styles.inputLabel}>Full Name</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="e.g. John Doe, Mom, Office Staff"
+                  placeholderTextColor="#94a3b8"
+                  value={registerName}
+                  onChangeText={setRegisterName}
+                />
 
-            <TouchableOpacity 
-              style={styles.singleImageUpload}
-              onPress={() => pickImage('register', 'library')}
-            >
-              {registerImage ? (
-                <Image source={{ uri: registerImage }} style={styles.previewImage} />
-              ) : (
-                <View style={styles.placeholder}>
-                  <Upload size={40} color="#94a3b8" />
-                  <Text style={styles.placeholderText}>Choose Profile Picture</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+                {registerImage ? (
+                  <View style={styles.cameraContainer}>
+                    <Image source={{ uri: registerImage }} style={styles.cameraPreview} />
+                    <TouchableOpacity 
+                      style={styles.retakeButton} 
+                      onPress={() => setRegisterImage(null)}
+                    >
+                      <RefreshCw size={16} color="#64748b" />
+                      <Text style={styles.retakeText}>Retake Photo</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.cameraContainer}>
+                    <CameraView
+                      style={styles.cameraPreview}
+                      facing="front"
+                      ref={cameraRef}
+                    />
+                    <TouchableOpacity 
+                      style={styles.captureButtonInline} 
+                      onPress={async () => {
+                        if (cameraRef.current) {
+                          try {
+                            const photo = await cameraRef.current.takePictureAsync({
+                              quality: 0.8,
+                            });
+                            if (photo && photo.uri) {
+                              setRegisterImage(photo.uri);
+                            }
+                          } catch (err: any) {
+                            alertOrToast('Error', 'Failed to capture photo: ' + err.message);
+                          }
+                        }
+                      }}
+                    >
+                      <View style={styles.captureButtonInner} />
+                    </TouchableOpacity>
+                  </View>
+                )}
 
-            <View style={styles.cameraRow}>
-              <TouchableOpacity 
-                style={styles.cameraButton} 
-                onPress={() => pickImage('register', 'camera')}
-              >
-                <Camera size={20} color="#1e40af" />
-                <Text style={styles.cameraButtonText}>Use Camera</Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity 
-              style={[styles.actionButton, (!registerImage || !registerName) && styles.disabledButton]}
-              onPress={registerFace}
-              disabled={!registerImage || !registerName || isRegistering}
-            >
-              {isRegistering ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <Text style={styles.actionButtonText}>Add to Database</Text>
-              )}
-            </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.actionButton, (!registerImage || !registerName) && styles.disabledButton]}
+                  onPress={registerFace}
+                  disabled={!registerImage || !registerName || isRegistering}
+                >
+                  {isRegistering ? (
+                    <ActivityIndicator color="#ffffff" />
+                  ) : (
+                    <Text style={styles.actionButtonText}>Add to Database</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
 
@@ -915,5 +955,83 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#ef4444',
     fontWeight: '600',
+  },
+  cameraContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 20,
+    position: 'relative',
+  },
+  cameraPreview: {
+    width: '100%',
+    height: 300,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#000000',
+  },
+  captureButtonInline: {
+    position: 'absolute',
+    bottom: 20,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 4,
+    borderColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+  },
+  captureButtonInner: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+  },
+  retakeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+  },
+  retakeText: {
+    color: '#64748b',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  mobileOnlyContainer: {
+    padding: 24,
+    backgroundColor: '#eff6ff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 10,
+  },
+  mobileOnlyText: {
+    color: '#1e40af',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+    fontWeight: '600',
+  },
+  permissionContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 30,
+    gap: 16,
+  },
+  permissionText: {
+    color: '#64748b',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
