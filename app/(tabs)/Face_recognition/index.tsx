@@ -1,5 +1,5 @@
 // app/(tabs)/Face_recognition/index.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,38 @@ import {
   ScrollView,
   Alert,
   Platform,
+  TextInput,
+  ActivityIndicator,
+  FlatList,
 } from 'react-native';
 import { api } from '../../../services/api';
-import { Upload, RefreshCw, Users } from 'lucide-react-native';
+import { 
+  Upload, 
+  RefreshCw, 
+  Users, 
+  Camera, 
+  Trash2, 
+  UserCheck, 
+  Database, 
+  ScanLine, 
+  ScanFace 
+} from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import FloatingNavBar from '../../../components/common/FloatingNavBar';
 
+type TabType = 'identify' | 'register' | 'database' | 'compare';
+
+interface RegisteredFace {
+  id: string;
+  name: string;
+  image_url: string;
+  file_path: string;
+}
+
 export default function FaceRecognitionScreen() {
+  const [activeTab, setActiveTab] = useState<TabType>('identify');
+  
+  // Compare Tab State
   const [image1, setImage1] = useState<string | null>(null);
   const [image2, setImage2] = useState<string | null>(null);
   const [isComparing, setIsComparing] = useState(false);
@@ -25,31 +50,99 @@ export default function FaceRecognitionScreen() {
     message: string;
   } | null>(null);
 
-  const pickImage = async (side: 'left' | 'right') => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
+  // Identify Tab State
+  const [singleImage, setSingleImage] = useState<string | null>(null);
+  const [isIdentifying, setIsIdentifying] = useState(false);
+  const [identifyResult, setIdentifyResult] = useState<{
+    match: boolean;
+    name?: string;
+    similarity_percentage?: number;
+    message: string;
+  } | null>(null);
+
+  // Register Tab State
+  const [registerName, setRegisterName] = useState('');
+  const [registerImage, setRegisterImage] = useState<string | null>(null);
+  const [isRegistering, setIsRegistering] = useState(false);
+
+  // Database Tab State
+  const [dbFaces, setDbFaces] = useState<RegisteredFace[]>([]);
+  const [isLoadingDb, setIsLoadingDb] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'database') {
+      fetchRegisteredFaces();
+    }
+  }, [activeTab]);
+
+  const fetchRegisteredFaces = async () => {
+    setIsLoadingDb(true);
+    try {
+      const response = await api.get('/face/registered');
+      setDbFaces(response.data || []);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsLoadingDb(false);
+    }
+  };
+
+  const getBaseURL = () => {
+    return api.defaults.baseURL || '';
+  };
+
+  const requestCameraPermission = async () => {
+    if (Platform.OS !== 'web') {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Sorry, we need camera permissions to make this work!');
+        return false;
+      }
+      return true;
+    }
+    return true;
+  };
+
+  const pickImage = async (type: 'image1' | 'image2' | 'single' | 'register', source: 'library' | 'camera') => {
+    let result;
+    
+    if (source === 'camera') {
+      const hasPermission = await requestCameraPermission();
+      if (!hasPermission) return;
+      result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+    } else {
+      result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+    }
 
     if (!result.canceled && result.assets[0]) {
-      if (side === 'left') {
-        setImage1(result.assets[0].uri);
-      } else {
-        setImage2(result.assets[0].uri);
+      const uri = result.assets[0].uri;
+      if (type === 'image1') {
+        setImage1(uri);
+        setResult(null);
+      } else if (type === 'image2') {
+        setImage2(uri);
+        setResult(null);
+      } else if (type === 'single') {
+        setSingleImage(uri);
+        setIdentifyResult(null);
+      } else if (type === 'register') {
+        setRegisterImage(uri);
       }
-      setResult(null); 
     }
   };
 
   const compareFaces = async () => {
     if (!image1 || !image2) {
-      if (Platform.OS === 'web') {
-        alert('Please upload both images');
-      } else {
-        Alert.alert('Error', 'Please upload both images');
-      }
+      alertOrToast('Error', 'Please upload both images');
       return;
     }
 
@@ -58,31 +151,11 @@ export default function FaceRecognitionScreen() {
 
     try {
       const formData = new FormData();
-      
-      const appendImage = async (key: string, uri: string) => {
-        if (Platform.OS === 'web') {
-          const response = await fetch(uri);
-          const blob = await response.blob();
-          formData.append(key, blob, `${key}.jpg`);
-        } else {
-          const filename = uri.split('/').pop() || `${key}.jpg`;
-          const match = /\.(\w+)$/.exec(filename);
-          const type = match ? `image/${match[1]}` : `image/jpeg`;
-          formData.append(key, {
-            uri,
-            name: filename,
-            type: type,
-          } as any);
-        }
-      };
-
-      await appendImage('image1', image1);
-      await appendImage('image2', image2);
+      await appendImageToFormData(formData, 'image1', image1);
+      await appendImageToFormData(formData, 'image2', image2);
 
       const response = await api.post('/face/compare', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
       if (response.data && response.data.success) {
@@ -97,95 +170,423 @@ export default function FaceRecognitionScreen() {
     } catch (error: any) {
       console.error(error);
       const errMsg = error.response?.data?.detail || error.message || 'Verification failed';
-      if (Platform.OS === 'web') {
-        alert(errMsg);
-      } else {
-        Alert.alert('Error', errMsg);
-      }
+      alertOrToast('Error', errMsg);
     } finally {
       setIsComparing(false);
     }
   };
 
-  const resetImages = () => {
-    setImage1(null);
-    setImage2(null);
-    setResult(null);
+  const identifyFace = async () => {
+    if (!singleImage) {
+      alertOrToast('Error', 'Please upload or capture a photo first');
+      return;
+    }
+
+    setIsIdentifying(true);
+    setIdentifyResult(null);
+
+    try {
+      const formData = new FormData();
+      await appendImageToFormData(formData, 'image', singleImage);
+
+      const response = await api.post('/face/identify', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      setIdentifyResult(response.data);
+    } catch (error: any) {
+      console.error(error);
+      const errMsg = error.response?.data?.detail || error.message || 'Identification failed';
+      alertOrToast('Error', errMsg);
+    } finally {
+      setIsIdentifying(false);
+    }
+  };
+
+  const registerFace = async () => {
+    if (!registerName.trim()) {
+      alertOrToast('Error', 'Please enter a name');
+      return;
+    }
+    if (!registerImage) {
+      alertOrToast('Error', 'Please upload or capture a photo');
+      return;
+    }
+
+    setIsRegistering(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('name', registerName.trim());
+      await appendImageToFormData(formData, 'image', registerImage);
+
+      const response = await api.post('/face/register', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      if (response.data && response.data.success) {
+        alertOrToast('Success', 'Face registered in the database successfully!');
+        setRegisterName('');
+        setRegisterImage(null);
+      } else {
+        throw new Error(response.data?.message || 'Failed to register face');
+      }
+    } catch (error: any) {
+      console.error(error);
+      const errMsg = error.response?.data?.detail || error.message || 'Registration failed';
+      alertOrToast('Error', errMsg);
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
+  const deleteFace = async (faceId: string) => {
+    const performDelete = async () => {
+      try {
+        await api.delete(`/face/registered/${faceId}`);
+        setDbFaces(dbFaces.filter(face => face.id !== faceId));
+        alertOrToast('Deleted', 'Profile deleted successfully');
+      } catch (error: any) {
+        alertOrToast('Error', 'Failed to delete profile');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (confirm('Are you sure you want to delete this profile?')) {
+        performDelete();
+      }
+    } else {
+      Alert.alert(
+        'Delete Face Profile',
+        'Are you sure you want to delete this profile from the database?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: performDelete },
+        ]
+      );
+    }
+  };
+
+  const appendImageToFormData = async (formData: FormData, key: string, uri: string) => {
+    if (Platform.OS === 'web') {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      formData.append(key, blob, `${key}.jpg`);
+    } else {
+      const filename = uri.split('/').pop() || `${key}.jpg`;
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : `image/jpeg`;
+      formData.append(key, {
+        uri,
+        name: filename,
+        type: type,
+      } as any);
+    }
+  };
+
+  const alertOrToast = (title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      alert(`${title}: ${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
   };
 
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <Users size={32} color="#1e40af" />
+          <ScanFace size={38} color="#1e40af" />
           <Text style={styles.title}>Face Recognition</Text>
-          <Text style={styles.subtitle}>Compare two faces using DeepFace</Text>
+          <Text style={styles.subtitle}>VisionGuard Intelligent Profile DB</Text>
         </View>
 
-        <View style={styles.imageContainer}>
-          {/* Left Image */}
-          <View style={styles.imageBox}>
-            <Text style={styles.imageLabel}>Image 1 (Reference)</Text>
-            <TouchableOpacity 
-              style={styles.imageUpload}
-              onPress={() => pickImage('left')}
-            >
-              {image1 ? (
-                <Image source={{ uri: image1 }} style={styles.previewImage} />
-              ) : (
-                <View style={styles.placeholder}>
-                  <Upload size={40} color="#94a3b8" />
-                  <Text style={styles.placeholderText}>Upload Photo</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Right Image */}
-          <View style={styles.imageBox}>
-            <Text style={styles.imageLabel}>Image 2 (Compare)</Text>
-            <TouchableOpacity 
-              style={styles.imageUpload}
-              onPress={() => pickImage('right')}
-            >
-              {image2 ? (
-                <Image source={{ uri: image2 }} style={styles.previewImage} />
-              ) : (
-                <View style={styles.placeholder}>
-                  <Upload size={40} color="#94a3b8" />
-                  <Text style={styles.placeholderText}>Upload Photo</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.actionContainer}>
+        {/* Tab Selection */}
+        <View style={styles.tabContainer}>
           <TouchableOpacity 
-            style={[styles.compareButton, (!image1 || !image2) && styles.disabledButton]}
-            onPress={compareFaces}
-            disabled={!image1 || !image2 || isComparing}
+            style={[styles.tabButton, activeTab === 'identify' && styles.activeTabButton]}
+            onPress={() => setActiveTab('identify')}
           >
-            <Text style={styles.compareButtonText}>
-              {isComparing ? "Comparing Faces..." : "Compare Faces"}
-            </Text>
+            <ScanLine size={18} color={activeTab === 'identify' ? '#ffffff' : '#64748b'} />
+            <Text style={[styles.tabText, activeTab === 'identify' && styles.activeTabText]}>Identify</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.resetButton} onPress={resetImages}>
-            <RefreshCw size={20} color="#64748b" />
-            <Text style={styles.resetText}>Reset Images</Text>
+          <TouchableOpacity 
+            style={[styles.tabButton, activeTab === 'register' && styles.activeTabButton]}
+            onPress={() => setActiveTab('register')}
+          >
+            <UserCheck size={18} color={activeTab === 'register' ? '#ffffff' : '#64748b'} />
+            <Text style={[styles.tabText, activeTab === 'register' && styles.activeTabText]}>Add Face</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.tabButton, activeTab === 'database' && styles.activeTabButton]}
+            onPress={() => setActiveTab('database')}
+          >
+            <Database size={18} color={activeTab === 'database' ? '#ffffff' : '#64748b'} />
+            <Text style={[styles.tabText, activeTab === 'database' && styles.activeTabText]}>Database</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.tabButton, activeTab === 'compare' && styles.activeTabButton]}
+            onPress={() => setActiveTab('compare')}
+          >
+            <Users size={18} color={activeTab === 'compare' ? '#ffffff' : '#64748b'} />
+            <Text style={[styles.tabText, activeTab === 'compare' && styles.activeTabText]}>Compare</Text>
           </TouchableOpacity>
         </View>
 
-        {result && (
-          <View style={[styles.resultCard, result.match ? styles.matchCard : styles.noMatchCard]}>
-            <Text style={styles.resultTitle}>
-              {result.match ? "✅ Match Found" : "❌ No Match"}
+        {/* Tab Content: Identify */}
+        {activeTab === 'identify' && (
+          <View style={styles.contentCard}>
+            <Text style={styles.cardTitle}>Identify Person</Text>
+            <Text style={styles.cardDescription}>
+              Upload or snap a photo of a face to check if they are in the database.
             </Text>
-            <Text style={styles.similarityText}>
-              Similarity: <Text style={styles.similarityValue}>{result.similarity}%</Text>
+
+            <TouchableOpacity 
+              style={styles.singleImageUpload}
+              onPress={() => pickImage('single', 'library')}
+            >
+              {singleImage ? (
+                <Image source={{ uri: singleImage }} style={styles.previewImage} />
+              ) : (
+                <View style={styles.placeholder}>
+                  <Upload size={40} color="#94a3b8" />
+                  <Text style={styles.placeholderText}>Choose from Library</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.cameraRow}>
+              <TouchableOpacity 
+                style={styles.cameraButton} 
+                onPress={() => pickImage('single', 'camera')}
+              >
+                <Camera size={20} color="#1e40af" />
+                <Text style={styles.cameraButtonText}>Take a Photo</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.actionButton, !singleImage && styles.disabledButton]}
+              onPress={identifyFace}
+              disabled={!singleImage || isIdentifying}
+            >
+              {isIdentifying ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.actionButtonText}>Identify Face</Text>
+              )}
+            </TouchableOpacity>
+
+            {identifyResult && (
+              <View style={[
+                styles.resultCard, 
+                identifyResult.match ? styles.matchCard : styles.noMatchCard
+              ]}>
+                <Text style={styles.resultTitle}>
+                  {identifyResult.match ? `✅ Match Found` : `❌ No Match`}
+                </Text>
+                {identifyResult.match && (
+                  <View style={styles.matchDetails}>
+                    <Text style={styles.matchName}>{identifyResult.name}</Text>
+                    <Text style={styles.matchSimilarity}>
+                      Confidence: {identifyResult.similarity_percentage}%
+                    </Text>
+                  </View>
+                )}
+                <Text style={styles.resultMessage}>{identifyResult.message}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Tab Content: Register Face */}
+        {activeTab === 'register' && (
+          <View style={styles.contentCard}>
+            <Text style={styles.cardTitle}>Register New Face</Text>
+            <Text style={styles.cardDescription}>
+              Add a person to the database by providing their name and a clear photo of their face.
             </Text>
-            <Text style={styles.resultMessage}>{result.message}</Text>
+
+            <Text style={styles.inputLabel}>Full Name</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="e.g. John Doe, Mom, Office Staff"
+              placeholderTextColor="#94a3b8"
+              value={registerName}
+              onChangeText={setRegisterName}
+            />
+
+            <TouchableOpacity 
+              style={styles.singleImageUpload}
+              onPress={() => pickImage('register', 'library')}
+            >
+              {registerImage ? (
+                <Image source={{ uri: registerImage }} style={styles.previewImage} />
+              ) : (
+                <View style={styles.placeholder}>
+                  <Upload size={40} color="#94a3b8" />
+                  <Text style={styles.placeholderText}>Choose Profile Picture</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.cameraRow}>
+              <TouchableOpacity 
+                style={styles.cameraButton} 
+                onPress={() => pickImage('register', 'camera')}
+              >
+                <Camera size={20} color="#1e40af" />
+                <Text style={styles.cameraButtonText}>Use Camera</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.actionButton, (!registerImage || !registerName) && styles.disabledButton]}
+              onPress={registerFace}
+              disabled={!registerImage || !registerName || isRegistering}
+            >
+              {isRegistering ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.actionButtonText}>Add to Database</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Tab Content: Database */}
+        {activeTab === 'database' && (
+          <View style={styles.contentCard}>
+            <Text style={styles.cardTitle}>Registered Face Profiles</Text>
+            <Text style={styles.cardDescription}>
+              All individuals recognized by VisionGuard system.
+            </Text>
+
+            {isLoadingDb ? (
+              <ActivityIndicator style={{ marginVertical: 30 }} size="large" color="#1e40af" />
+            ) : dbFaces.length === 0 ? (
+              <View style={styles.emptyDbState}>
+                <Database size={48} color="#94a3b8" />
+                <Text style={styles.emptyDbText}>No registered profiles in database</Text>
+              </View>
+            ) : (
+              <View style={styles.gridContainer}>
+                {dbFaces.map((item) => (
+                  <View key={item.id} style={styles.faceListItem}>
+                    <Image 
+                      source={{ uri: `${getBaseURL()}${item.image_url}` }} 
+                      style={styles.faceListAvatar} 
+                    />
+                    <View style={styles.faceListInfo}>
+                      <Text style={styles.faceListName}>{item.name}</Text>
+                      <TouchableOpacity 
+                        style={styles.deleteButton}
+                        onPress={() => deleteFace(item.id)}
+                      >
+                        <Trash2 size={16} color="#ef4444" />
+                        <Text style={styles.deleteButtonText}>Delete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Tab Content: Compare (Original View) */}
+        {activeTab === 'compare' && (
+          <View style={styles.contentCard}>
+            <Text style={styles.cardTitle}>Compare 1 vs 1</Text>
+            <Text style={styles.cardDescription}>
+              Verify if the face on two separate images belongs to the same person.
+            </Text>
+
+            <View style={styles.imageContainer}>
+              <View style={styles.imageBox}>
+                <Text style={styles.imageLabel}>Image 1</Text>
+                <TouchableOpacity 
+                  style={styles.imageUpload}
+                  onPress={() => pickImage('image1', 'library')}
+                >
+                  {image1 ? (
+                    <Image source={{ uri: image1 }} style={styles.previewImage} />
+                  ) : (
+                    <View style={styles.placeholder}>
+                      <Upload size={32} color="#94a3b8" />
+                      <Text style={styles.placeholderText}>Upload</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.smallCameraButton}
+                  onPress={() => pickImage('image1', 'camera')}
+                >
+                  <Camera size={14} color="#64748b" />
+                  <Text style={styles.smallCameraText}>Snap</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.imageBox}>
+                <Text style={styles.imageLabel}>Image 2</Text>
+                <TouchableOpacity 
+                  style={styles.imageUpload}
+                  onPress={() => pickImage('image2', 'library')}
+                >
+                  {image2 ? (
+                    <Image source={{ uri: image2 }} style={styles.previewImage} />
+                  ) : (
+                    <View style={styles.placeholder}>
+                      <Upload size={32} color="#94a3b8" />
+                      <Text style={styles.placeholderText}>Upload</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.smallCameraButton}
+                  onPress={() => pickImage('image2', 'camera')}
+                >
+                  <Camera size={14} color="#64748b" />
+                  <Text style={styles.smallCameraText}>Snap</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.actionButton, (!image1 || !image2) && styles.disabledButton]}
+              onPress={compareFaces}
+              disabled={!image1 || !image2 || isComparing}
+            >
+              {isComparing ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.actionButtonText}>Compare Faces</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.resetButton} onPress={() => {
+              setImage1(null);
+              setImage2(null);
+              setResult(null);
+            }}>
+              <RefreshCw size={18} color="#64748b" />
+              <Text style={styles.resetText}>Reset Images</Text>
+            </TouchableOpacity>
+
+            {result && (
+              <View style={[styles.resultCard, result.match ? styles.matchCard : styles.noMatchCard]}>
+                <Text style={styles.resultTitle}>
+                  {result.match ? "✅ Match Found" : "❌ No Match"}
+                </Text>
+                <Text style={styles.similarityText}>
+                  Similarity: <Text style={styles.similarityValue}>{result.similarity}%</Text>
+                </Text>
+                <Text style={styles.resultMessage}>{result.message}</Text>
+              </View>
+            )}
           </View>
         )}
       </ScrollView>
@@ -197,31 +598,152 @@ export default function FaceRecognitionScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
-  scrollContent: { paddingBottom: 100 },
-  header: { alignItems: 'center', paddingTop: 50, paddingBottom: 30 },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#1e40af', marginTop: 12 },
-  subtitle: { fontSize: 16, color: '#64748b', marginTop: 6 },
+  scrollContent: { paddingBottom: 120 },
+  header: { alignItems: 'center', paddingTop: 40, paddingBottom: 20 },
+  title: { fontSize: 26, fontWeight: 'bold', color: '#1e40af', marginTop: 10 },
+  subtitle: { fontSize: 14, color: '#64748b', marginTop: 4 },
 
-  imageContainer: {
+  tabContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    gap: 12,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 14,
+    marginHorizontal: 16,
+    padding: 4,
+    marginBottom: 20,
   },
-  imageBox: { flex: 1 },
-  imageLabel: {
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  activeTabButton: {
+    backgroundColor: '#1e40af',
+  },
+  tabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  activeTabText: {
+    color: '#ffffff',
+  },
+
+  contentCard: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 16,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 6,
+  },
+  cardDescription: {
+    fontSize: 13,
+    color: '#64748b',
+    marginBottom: 20,
+    lineHeight: 18,
+  },
+
+  inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#475569',
+    color: '#334155',
     marginBottom: 8,
-    textAlign: 'center',
   },
-  imageUpload: {
-    height: 220,
+  textInput: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#0f172a',
+    marginBottom: 16,
+  },
+
+  singleImageUpload: {
+    height: 200,
     borderRadius: 16,
     borderWidth: 2,
     borderColor: '#e2e8f0',
-    backgroundColor: '#fff',
+    borderStyle: 'dashed',
+    backgroundColor: '#f8fafc',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  cameraRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  cameraButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#1e40af',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    backgroundColor: '#eff6ff',
+  },
+  cameraButtonText: {
+    color: '#1e40af',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  actionButton: {
+    backgroundColor: '#1e40af',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  disabledButton: {
+    backgroundColor: '#cbd5e1',
+  },
+  actionButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  imageContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  imageBox: {
+    flex: 1,
+  },
+  imageLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  imageUpload: {
+    height: 140,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#f8fafc',
     overflow: 'hidden',
   },
   previewImage: {
@@ -233,79 +755,155 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+    gap: 8,
   },
   placeholderText: {
     color: '#94a3b8',
-    fontSize: 15,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  smallCameraButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 8,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+  },
+  smallCameraText: {
+    fontSize: 12,
+    color: '#64748b',
     fontWeight: '500',
   },
 
-  actionContainer: {
-    paddingHorizontal: 20,
-    marginTop: 30,
-    gap: 12,
-  },
-  compareButton: {
-    backgroundColor: '#1e40af',
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  disabledButton: {
-    backgroundColor: '#94a3b8',
-  },
-  compareButtonText: {
-    color: 'white',
-    fontSize: 17,
-    fontWeight: '600',
-  },
   resetButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
     paddingVertical: 12,
+    marginTop: 10,
   },
   resetText: {
     color: '#64748b',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '500',
   },
 
   resultCard: {
-    margin: 20,
-    padding: 20,
-    borderRadius: 16,
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 14,
     alignItems: 'center',
   },
   matchCard: {
     backgroundColor: '#f0fdf4',
     borderWidth: 1,
-    borderColor: '#86efac',
+    borderColor: '#bbf7d0',
   },
   noMatchCard: {
     backgroundColor: '#fef2f2',
     borderWidth: 1,
-    borderColor: '#fda4af',
+    borderColor: '#fecdd3',
   },
   resultTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
-    marginBottom: 8,
-  },
-  similarityText: {
-    fontSize: 18,
+    color: '#0f172a',
     marginBottom: 6,
   },
+  matchDetails: {
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  matchName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#166534',
+  },
+  matchSimilarity: {
+    fontSize: 14,
+    color: '#15803d',
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  similarityText: {
+    fontSize: 15,
+    marginBottom: 4,
+    color: '#334155',
+  },
   similarityValue: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '800',
     color: '#1e40af',
   },
   resultMessage: {
     textAlign: 'center',
     color: '#475569',
-    marginTop: 8,
+    fontSize: 13,
+    marginTop: 6,
+    lineHeight: 18,
+  },
+
+  emptyDbState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 12,
+  },
+  emptyDbText: {
+    fontSize: 14,
+    color: '#94a3b8',
+    fontWeight: '500',
+  },
+  gridContainer: {
+    gap: 12,
+  },
+  faceListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    gap: 12,
+  },
+  faceListAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#e2e8f0',
+  },
+  faceListInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  faceListName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fee2e2',
+  },
+  deleteButtonText: {
+    fontSize: 12,
+    color: '#ef4444',
+    fontWeight: '600',
   },
 });
