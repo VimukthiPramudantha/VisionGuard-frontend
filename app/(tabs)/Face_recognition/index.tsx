@@ -462,7 +462,7 @@ export default function FaceRecognitionScreen() {
           <View style={styles.contentCard}>
             <Text style={styles.cardTitle}>Registered Face Profiles</Text>
             <Text style={styles.cardDescription}>
-              All individuals recognized by VisionGuard system.
+              All individuals recognized by VisionGuard system (stored securely as facial vectors).
             </Text>
 
             {isLoadingDb ? (
@@ -476,10 +476,11 @@ export default function FaceRecognitionScreen() {
               <View style={styles.gridContainer}>
                 {dbFaces.map((item) => (
                   <View key={item.id} style={styles.faceListItem}>
-                    <Image 
-                      source={{ uri: `${getBaseURL()}${item.image_url}` }} 
-                      style={styles.faceListAvatar} 
-                    />
+                    <View style={styles.faceListAvatarPlaceholder}>
+                      <Text style={styles.avatarText}>
+                        {item.name ? item.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '?'}
+                      </Text>
+                    </View>
                     <View style={styles.faceListInfo}>
                       <Text style={styles.faceListName}>{item.name}</Text>
                       <TouchableOpacity 
@@ -873,11 +874,20 @@ const styles = StyleSheet.create({
     borderColor: '#f1f5f9',
     gap: 12,
   },
-  faceListAvatar: {
+  faceListAvatarPlaceholder: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#eff6ff',
+    borderWidth: 2,
+    borderColor: '#bfdbfe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    color: '#1e40af',
+    fontSize: 20,
+    fontWeight: '700',
   },
   faceListInfo: {
     flex: 1,
