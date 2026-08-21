@@ -400,7 +400,6 @@ export default function FaceRecognitionScreen() {
           </View>
         )}
 
-        {/* Tab Content: Register Face */}
         {activeTab === 'register' && (
           <View style={styles.contentCard}>
             <Text style={styles.cardTitle}>Register New Face</Text>
@@ -492,7 +491,6 @@ export default function FaceRecognitionScreen() {
           </View>
         )}
 
-        {/* Tab Content: Database */}
         {activeTab === 'database' && (
           <View style={styles.contentCard}>
             <Text style={styles.cardTitle}>Registered Face Profiles</Text>
@@ -533,7 +531,6 @@ export default function FaceRecognitionScreen() {
           </View>
         )}
 
-        {/* Tab Content: Compare (Original View) */}
         {activeTab === 'compare' && (
           <View style={styles.contentCard}>
             <Text style={styles.cardTitle}>Compare 1 vs 1</Text>
