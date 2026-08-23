@@ -44,10 +44,15 @@ export default function IdentifyTab() {
       });
 
       setIdentifyResult(response.data);
+      if (response.data.match) {
+        alertOrToast('Match Found', response.data.name ? `Identified: ${response.data.name} (Confidence: ${response.data.similarity_percentage}%)` : response.data.message, 'success');
+      } else {
+        alertOrToast('No Match', response.data.message || 'Face not recognized in database.', 'error');
+      }
     } catch (error: any) {
       console.error(error);
       const errMsg = error.response?.data?.detail || error.message || 'Identification failed';
-      alertOrToast('Error', errMsg);
+      alertOrToast('Error', errMsg, 'error');
     } finally {
       setIsIdentifying(false);
     }

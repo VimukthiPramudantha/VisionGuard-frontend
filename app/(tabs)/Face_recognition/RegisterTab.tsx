@@ -45,7 +45,7 @@ export default function RegisterTab() {
       });
 
       if (response.data && response.data.success) {
-        alertOrToast('Success', 'Face registered in the database successfully!');
+        alertOrToast('Success', 'Face registered in the database successfully!', 'success');
         setRegisterName('');
         setRegisterImage(null);
       } else {
@@ -54,7 +54,7 @@ export default function RegisterTab() {
     } catch (error: any) {
       console.error(error);
       const errMsg = error.response?.data?.detail || error.message || 'Registration failed';
-      alertOrToast('Error', errMsg);
+      alertOrToast('Error', errMsg, 'error');
     } finally {
       setIsRegistering(false);
     }

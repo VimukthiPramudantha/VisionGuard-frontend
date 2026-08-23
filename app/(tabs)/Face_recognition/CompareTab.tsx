@@ -50,18 +50,27 @@ export default function CompareTab() {
       });
 
       if (response.data && response.data.success) {
+        const similarity = response.data.similarity_percentage;
+        const match = response.data.match;
+        const msg = response.data.message || (match ? "Faces match successfully!" : "Faces do not match. plz try again");
         setResult({
-          similarity: response.data.similarity_percentage,
-          match: response.data.match,
-          message: response.data.message || (response.data.match ? "Faces match successfully!" : "Faces do not match. plz try again"),
+          similarity: similarity,
+          match: match,
+          message: msg,
         });
+
+        if (match) {
+          alertOrToast('Match Found', `Faces match successfully! (Similarity: ${similarity}%)`, 'success');
+        } else {
+          alertOrToast('No Match', `Faces do not match. (Similarity: ${similarity}%)`, 'error');
+        }
       } else {
         throw new Error(response.data?.message || 'Face verification failed');
       }
     } catch (error: any) {
       console.error(error);
       const errMsg = error.response?.data?.detail || error.message || 'Verification failed';
-      alertOrToast('Error', errMsg);
+      alertOrToast('Error', errMsg, 'error');
     } finally {
       setIsComparing(false);
     }

@@ -39,9 +39,9 @@ export default function DatabaseTab() {
       try {
         await api.delete(`/face/registered/${faceId}`);
         setDbFaces(dbFaces.filter(face => face.id !== faceId));
-        alertOrToast('Deleted', 'Profile deleted successfully');
+        alertOrToast('Deleted', 'Profile deleted successfully', 'success');
       } catch (error: any) {
-        alertOrToast('Error', 'Failed to delete profile');
+        alertOrToast('Error', 'Failed to delete profile', 'error');
       }
     };
 

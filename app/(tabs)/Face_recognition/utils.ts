@@ -2,9 +2,26 @@
 import { Platform, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
-export const alertOrToast = (title: string, message: string) => {
+let goeyToast: any = null;
+if (Platform.OS === 'web') {
+  try {
+    goeyToast = require('goey-toast').goeyToast;
+  } catch (e) {
+    console.warn('goey-toast failed to load in face recognition utils', e);
+  }
+}
+
+export const alertOrToast = (title: string, message: string, type: 'success' | 'error' = 'error') => {
   if (Platform.OS === 'web') {
-    alert(`${title}: ${message}`);
+    if (goeyToast) {
+      if (type === 'success') {
+        goeyToast.success(title, { description: message });
+      } else {
+        goeyToast.error(title, { description: message });
+      }
+    } else {
+      alert(`${title}: ${message}`);
+    }
   } else {
     Alert.alert(title, message);
   }
