@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
-  Image,
   Platform,
   Modal,
   TextInput,
@@ -18,8 +17,10 @@ import { api } from '../../../services/api';
 import FloatingNavBar from '../../../components/common/FloatingNavBar';
 import LoadingAnimation from '../../../components/common/LoadingAnimation';
 import InfoTooltip from '../../../components/common/InfoTooltip';
+import MjpegFeed from '../../../components/common/MjpegFeed';
+import { alertOrToast } from '../Face_recognition/utils';
 
-const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000';
+const BASE_URL = api.defaults.baseURL || (Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000');
 
 interface Camera {
   id: string;
@@ -78,7 +79,7 @@ export default function CamarasScreen() {
 
   const handleAddCamera = async () => {
     if (!newCamName.trim() || !newCamUrl.trim()) {
-      Alert.alert('Error', 'Please fill in both Name and Connection Link');
+      alertOrToast('Error', 'Please fill in both Name and Connection Link', 'error');
       return;
     }
     
@@ -90,15 +91,16 @@ export default function CamarasScreen() {
         url: newCamUrl.trim(),
         location: newCamLocation.trim() || 'Custom Location'
       });
-      Alert.alert('Success', 'Camera connected successfully');
+      alertOrToast('Success', 'Camera connected successfully', 'success');
       setModalVisible(false);
       setNewCamName('');
       setNewCamUrl('');
       setNewCamLocation('');
       fetchCameras();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      Alert.alert('Error', 'Failed to add camera');
+      const errorMsg = error.response?.data?.detail || 'Failed to add camera';
+      alertOrToast('Error', errorMsg, 'error');
     } finally {
       setAdding(false);
     }
@@ -112,8 +114,8 @@ export default function CamarasScreen() {
       <View style={[styles.cameraCard, isOnline ? styles.cardOnline : styles.cardOffline]}>
         
         <View style={styles.feedContainer}>
-          <Image
-            source={{ uri: feedUri }}
+          <MjpegFeed
+            uri={feedUri}
             style={styles.feedImage}
             resizeMode="cover"
           />
