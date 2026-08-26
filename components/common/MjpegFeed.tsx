@@ -119,17 +119,33 @@ function WebSocketImage({
     };
   }, [uri]);
 
+  const handleLoadEnd = () => {
+    if (nextFrame) {
+      setCurrentFrame(nextFrame);
+    }
+  };
+
   const flattenedStyle = StyleSheet.flatten(style) || {};
 
   return (
     <View style={[flattenedStyle, { backgroundColor: '#000', overflow: 'hidden' }]}>
-      {nextFrame ? (
+      {currentFrame && (
         <Image
-          source={{ uri: nextFrame }}
+          source={{ uri: currentFrame }}
           style={[StyleSheet.absoluteFillObject]}
           resizeMode={resizeMode}
         />
-      ) : (
+      )}
+
+      {nextFrame && (
+        <Image
+          source={{ uri: nextFrame }}
+          style={{ position: 'absolute', width: 1, height: 1, opacity: 0.01 }}
+          onLoadEnd={handleLoadEnd}
+        />
+      )}
+
+      {!currentFrame && (
         <View style={[StyleSheet.absoluteFillObject, styles.placeholder]}>
           <Text style={styles.placeholderText}>
             {status === 'connecting' ? 'Connecting stream...' : 'Feed connection error'}
