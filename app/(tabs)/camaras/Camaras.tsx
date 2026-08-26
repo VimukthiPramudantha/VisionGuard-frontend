@@ -8,16 +8,19 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
-  Image,
   Platform,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { Plus, Video, Radio, Shield, MapPin, RefreshCw } from 'lucide-react-native';
 import { api } from '../../../services/api';
 import FloatingNavBar from '../../../components/common/FloatingNavBar';
 import LoadingAnimation from '../../../components/common/LoadingAnimation';
 import InfoTooltip from '../../../components/common/InfoTooltip';
+import MjpegFeed from '../../../components/common/MjpegFeed';
+import { alertOrToast } from '../Face_recognition/utils';
 
-const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000';
+const BASE_URL = api.defaults.baseURL || (Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000');
 
 interface Camera {
   id: string;
@@ -35,6 +38,11 @@ export default function CamarasScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [minTimeDone, setMinTimeDone] = useState(false);
   const [fetchDone, setFetchDone] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [newCamName, setNewCamName] = useState('');
+  const [newCamUrl, setNewCamUrl] = useState('');
+  const [newCamLocation, setNewCamLocation] = useState('');
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setMinTimeDone(true), 2000);
@@ -69,6 +77,35 @@ export default function CamarasScreen() {
     fetchCameras();
   };
 
+  const handleAddCamera = async () => {
+    if (!newCamName.trim() || !newCamUrl.trim()) {
+      alertOrToast('Error', 'Please fill in both Name and Connection Link', 'error');
+      return;
+    }
+    
+    setAdding(true);
+    try {
+      await api.post('/cameras', {
+        name: newCamName.trim(),
+        type: newCamUrl.trim().toLowerCase().startsWith('rtsp') ? 'rtsp' : 'network',
+        url: newCamUrl.trim(),
+        location: newCamLocation.trim() || 'Custom Location'
+      });
+      alertOrToast('Success', 'Camera connected successfully', 'success');
+      setModalVisible(false);
+      setNewCamName('');
+      setNewCamUrl('');
+      setNewCamLocation('');
+      fetchCameras();
+    } catch (error: any) {
+      console.error(error);
+      const errorMsg = error.response?.data?.detail || 'Failed to add camera';
+      alertOrToast('Error', errorMsg, 'error');
+    } finally {
+      setAdding(false);
+    }
+  };
+
   const renderCamera = ({ item }: { item: Camera }) => {
     const isOnline = item.status === 'online';
     const feedUri = `${BASE_URL}/cameras/${item.id}/feed?t=${Date.now()}`;
@@ -77,8 +114,8 @@ export default function CamarasScreen() {
       <View style={[styles.cameraCard, isOnline ? styles.cardOnline : styles.cardOffline]}>
         
         <View style={styles.feedContainer}>
-          <Image
-            source={{ uri: feedUri }}
+          <MjpegFeed
+            uri={feedUri}
             style={styles.feedImage}
             resizeMode="cover"
           />
@@ -141,7 +178,7 @@ export default function CamarasScreen() {
               <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
                 <RefreshCw size={18} color="#475569" />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.addButton}>
+              <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
                 <Plus size={18} color="#fff" />
               </TouchableOpacity>
             </View>
@@ -175,6 +212,67 @@ export default function CamarasScreen() {
           />
 
           <FloatingNavBar />
+
+          <Modal
+            animationType="slide"
+            transparent={true}
+            visible={modalVisible}
+            onRequestClose={() => setModalVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Connect Security Camera</Text>
+                
+                <Text style={styles.inputLabel}>Camera Name *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Front Gate CCTV"
+                  value={newCamName}
+                  onChangeText={setNewCamName}
+                  placeholderTextColor="#94a3b8"
+                />
+
+                <Text style={styles.inputLabel}>IP / RTSP URL Link *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="rtsp://admin:password@192.168.1.6:554/avstream"
+                  value={newCamUrl}
+                  onChangeText={newText => setNewCamUrl(newText)}
+                  placeholderTextColor="#94a3b8"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+
+                <Text style={styles.inputLabel}>Location (Optional)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Outdoor Yard"
+                  value={newCamLocation}
+                  onChangeText={setNewCamLocation}
+                  placeholderTextColor="#94a3b8"
+                />
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity 
+                    style={[styles.modalButton, styles.cancelButton]} 
+                    onPress={() => setModalVisible(false)}
+                    disabled={adding}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.modalButton, styles.connectButton]} 
+                    onPress={handleAddCamera}
+                    disabled={adding}
+                  >
+                    <Text style={styles.connectButtonText}>
+                      {adding ? 'Connecting...' : 'Connect'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
         </>
       )}
     </View>
@@ -400,5 +498,79 @@ const styles = StyleSheet.create({
     marginTop: 20,
     alignItems: 'center',
     zIndex: 10,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
+    width: '90%',
+    maxWidth: 450,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 6,
+    marginTop: 10,
+  },
+  input: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#0f172a',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 24,
+  },
+  modalButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 90,
+  },
+  cancelButton: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  connectButton: {
+    backgroundColor: '#1fb2c5',
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  connectButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });
