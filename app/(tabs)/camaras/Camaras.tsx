@@ -44,6 +44,7 @@ export default function CamarasScreen() {
   const [newCamLocation, setNewCamLocation] = useState('');
   const [adding, setAdding] = useState(false);
   const [selectedCameraForFullView, setSelectedCameraForFullView] = useState<Camera | null>(null);
+  const [fullscreenUri, setFullscreenUri] = useState<string>('');
 
   useEffect(() => {
     const timer = setTimeout(() => setMinTimeDone(true), 2000);
@@ -147,7 +148,10 @@ export default function CamarasScreen() {
             {isOnline && (
               <TouchableOpacity
                 style={styles.fullscreenIconContainer}
-                onPress={() => setSelectedCameraForFullView(item)}
+                onPress={() => {
+                  setSelectedCameraForFullView(item);
+                  setFullscreenUri(`${BASE_URL}/cameras/${item.id}/feed?t=${Date.now()}`);
+                }}
               >
                 <Maximize2 size={12} color="#fff" />
               </TouchableOpacity>
@@ -307,7 +311,7 @@ export default function CamarasScreen() {
                     </View>
                     <View style={styles.fullScreenFeedContainer}>
                       <MjpegFeed
-                        uri={`${BASE_URL}/cameras/${selectedCameraForFullView.id}/feed?t=${Date.now()}`}
+                        uri={fullscreenUri}
                         style={styles.fullScreenFeedImage}
                         resizeMode="contain"
                       />
@@ -640,6 +644,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#334155',
+    display: 'flex',
+    flexDirection: 'column',
   },
   fullScreenHeader: {
     flexDirection: 'row',
@@ -672,6 +678,7 @@ const styles = StyleSheet.create({
   },
   fullScreenFeedContainer: {
     flex: 1,
+    width: '100%',
     backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
