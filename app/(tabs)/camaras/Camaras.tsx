@@ -45,6 +45,7 @@ export default function CamarasScreen() {
   const [adding, setAdding] = useState(false);
   const [selectedCameraForFullView, setSelectedCameraForFullView] = useState<Camera | null>(null);
   const [fullscreenUri, setFullscreenUri] = useState<string>('');
+  const [activeCameraIndex, setActiveCameraIndex] = useState<number>(0);
 
   useEffect(() => {
     const timer = setTimeout(() => setMinTimeDone(true), 2000);
@@ -209,22 +210,118 @@ export default function CamarasScreen() {
             </View>
           </View>
 
-          <FlatList
-            data={cameras}
-            keyExtractor={(item) => item.id}
-            renderItem={renderCamera}
-            numColumns={3}
-            columnWrapperStyle={styles.gridRow}
-            contentContainerStyle={styles.listContent}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor="#1fb2c5"
-                colors={['#1fb2c5']}
-              />
-            }
-            ListEmptyComponent={
+           {cameras.length > 0 ? (
+              <View style={styles.singleFeedLayout}>
+                {/* Active Camera View */}
+                {(() => {
+                  const activeCam = cameras[activeCameraIndex] || cameras[0];
+                  if (!activeCam) return null;
+                  const isOnline = activeCam.status === 'online';
+                  const isFullView = selectedCameraForFullView?.id === activeCam.id;
+                  const feedUri = `${BASE_URL}/cameras/${activeCam.id}/feed?t=${Date.now()}`;
+
+                  return (
+                    <View style={styles.activeFeedCard}>
+                      <View style={styles.activeFeedContainer}>
+                        {isOnline && !isFullView ? (
+                          <MjpegFeed
+                            uri={feedUri}
+                            style={styles.activeFeedImage}
+                            resizeMode="contain"
+                          />
+                        ) : isFullView ? (
+                          <View style={[styles.activeFeedImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' }]}>
+                            <Video size={36} color="#64748b" style={{ marginBottom: 12 }} />
+                            <Text style={{ color: '#94a3b8', fontSize: 13, fontWeight: '600' }}>Active in Full View</Text>
+                          </View>
+                        ) : (
+                          <View style={[styles.activeFeedImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' }]}>
+                            <Text style={{ color: '#ef4444', fontSize: 13, fontWeight: '600' }}>Offline</Text>
+                          </View>
+                        )}
+
+                        <View style={styles.badgeRow}>
+                          <View style={[
+                            styles.statusBadge,
+                            isOnline ? styles.badgeOnline : styles.badgeOffline
+                          ]}>
+                            <View style={[styles.pulseDot, isOnline ? styles.dotOnline : styles.dotOffline]} />
+                            <Text style={styles.statusText}>
+                              {isOnline ? 'LIVE' : 'OFFLINE'}
+                            </Text>
+                          </View>
+
+                          <View style={styles.typeBadge}>
+                            <Text style={styles.typeText}>{activeCam.type.toUpperCase()}</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.feedOverlay}>
+                          <View style={styles.locationContainer}>
+                            <MapPin size={12} color="#ffffffcc" />
+                            <Text numberOfLines={1} style={styles.overlayLocationText}>
+                              {activeCam.location || 'Local Host'}
+                            </Text>
+                          </View>
+                          {isOnline && (
+                            <TouchableOpacity
+                              style={styles.fullscreenIconContainer}
+                              onPress={() => {
+                                setSelectedCameraForFullView(activeCam);
+                                setFullscreenUri(`${BASE_URL}/cameras/${activeCam.id}/feed?t=${Date.now()}`);
+                              }}
+                            >
+                              <Maximize2 size={14} color="#fff" />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+
+                      <View style={styles.activeCardDetails}>
+                        <View style={styles.activeTitleRow}>
+                          <Text numberOfLines={1} style={styles.activeCameraName}>
+                            {activeCam.name}
+                          </Text>
+                          <Shield size={18} color={isOnline ? '#1fb2c5' : '#94a3b8'} />
+                        </View>
+                        <Text style={styles.activeLastActiveText}>
+                          {isOnline ? 'Active & monitoring system inputs' : 'Disconnected / Unreachable'}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })()}
+
+                {/* Bottom Navigation Buttons */}
+                <View style={styles.selectorContainer}>
+                  <Text style={styles.selectorLabel}>Switch Camera Feed</Text>
+                  <View style={styles.selectorButtonsRow}>
+                    {cameras.map((cam, idx) => {
+                      const isActive = idx === activeCameraIndex;
+                      const isCamOnline = cam.status === 'online';
+                      return (
+                        <TouchableOpacity
+                          key={cam.id}
+                          style={[
+                            styles.selectorButton,
+                            isActive && styles.selectorButtonActive,
+                          ]}
+                          onPress={() => setActiveCameraIndex(idx)}
+                        >
+                          <View style={[styles.selectorStatusDot, isCamOnline ? styles.dotOnline : styles.dotOffline]} />
+                          <Text style={[
+                            styles.selectorButtonText,
+                            isActive && styles.selectorButtonTextActive,
+                          ]}>
+                            {cam.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              </View>
+            ) : (
               <View style={styles.emptyContainer}>
                 <Video size={44} color="#64748b" strokeWidth={1.5} />
                 <Text style={styles.emptyText}>No Cameras Connected</Text>
@@ -233,8 +330,7 @@ export default function CamarasScreen() {
                   <InfoTooltip message="No cameras are currently connected. Please connect a webcam or configure a camera feed and refresh." />
                 </View>
               </View>
-            }
-          />
+            )}
 
           <FloatingNavBar />
 
@@ -410,8 +506,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 16,
     flex: 1,
-    maxWidth: '31.3%',
-    marginHorizontal: '1%',
+    maxWidth: Platform.OS === 'web' ? '48%' : '100%',
+    marginHorizontal: Platform.OS === 'web' ? '1%' : '0%',
     borderWidth: 1,
     overflow: 'hidden',
     shadowColor: '#0f172a',
@@ -427,7 +523,7 @@ const styles = StyleSheet.create({
     borderColor: '#fca5a5',
   },
   feedContainer: {
-    height: 250,
+    height: Platform.OS === 'web' ? 380 : 250,
     backgroundColor: '#f1f5f9',
     position: 'relative',
     overflow: 'hidden',
@@ -698,5 +794,111 @@ const styles = StyleSheet.create({
   fullScreenFeedImage: {
     width: '100%',
     height: '100%',
+  },
+  singleFeedLayout: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 110,
+    justifyContent: 'flex-start',
+  },
+  activeFeedCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+    marginBottom: 24,
+  },
+  activeFeedContainer: {
+    height: Platform.OS === 'web' ? 680 : 420,
+    backgroundColor: '#000000',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  activeFeedImage: {
+    width: '100%',
+    height: '100%',
+  },
+  activeCardDetails: {
+    padding: 20,
+    backgroundColor: '#ffffff',
+  },
+  activeTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  activeCameraName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0f172a',
+    flex: 1,
+    marginRight: 10,
+  },
+  activeLastActiveText: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  selectorContainer: {
+    marginTop: 8,
+  },
+  selectorLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 1.0,
+    marginBottom: 10,
+  },
+  selectorButtonsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  selectorButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  selectorButtonActive: {
+    backgroundColor: '#0f172a',
+    borderColor: '#0f172a',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  selectorStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 8,
+  },
+  selectorButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  selectorButtonTextActive: {
+    color: '#ffffff',
   },
 });
