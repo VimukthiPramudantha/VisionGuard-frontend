@@ -110,17 +110,29 @@ export default function CamarasScreen() {
 
   const renderCamera = ({ item }: { item: Camera }) => {
     const isOnline = item.status === 'online';
+    const isFullView = selectedCameraForFullView?.id === item.id;
     const feedUri = `${BASE_URL}/cameras/${item.id}/feed?t=${Date.now()}`;
 
     return (
       <View style={[styles.cameraCard, isOnline ? styles.cardOnline : styles.cardOffline]}>
 
         <View style={styles.feedContainer}>
-          <MjpegFeed
-            uri={feedUri}
-            style={styles.feedImage}
-            resizeMode="cover"
-          />
+          {isOnline && !isFullView ? (
+            <MjpegFeed
+              uri={feedUri}
+              style={styles.feedImage}
+              resizeMode="cover"
+            />
+          ) : isFullView ? (
+            <View style={[styles.feedImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' }]}>
+              <Video size={24} color="#64748b" style={{ marginBottom: 8 }} />
+              <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: '600' }}>Active in Full View</Text>
+            </View>
+          ) : (
+            <View style={[styles.feedImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' }]}>
+              <Text style={{ color: '#ef4444', fontSize: 11, fontWeight: '600' }}>Offline</Text>
+            </View>
+          )}
 
           <View style={styles.badgeRow}>
             <View style={[
