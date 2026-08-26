@@ -12,7 +12,7 @@ import {
   Modal,
   TextInput,
 } from 'react-native';
-import { Plus, Video, Radio, Shield, MapPin, RefreshCw } from 'lucide-react-native';
+import { Plus, Video, Radio, Shield, MapPin, RefreshCw, Maximize2 } from 'lucide-react-native';
 import { api } from '../../../services/api';
 import FloatingNavBar from '../../../components/common/FloatingNavBar';
 import LoadingAnimation from '../../../components/common/LoadingAnimation';
@@ -43,6 +43,7 @@ export default function CamarasScreen() {
   const [newCamUrl, setNewCamUrl] = useState('');
   const [newCamLocation, setNewCamLocation] = useState('');
   const [adding, setAdding] = useState(false);
+  const [selectedCameraForFullView, setSelectedCameraForFullView] = useState<Camera | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setMinTimeDone(true), 2000);
@@ -82,7 +83,7 @@ export default function CamarasScreen() {
       alertOrToast('Error', 'Please fill in both Name and Connection Link', 'error');
       return;
     }
-    
+
     setAdding(true);
     try {
       await api.post('/cameras', {
@@ -112,14 +113,14 @@ export default function CamarasScreen() {
 
     return (
       <View style={[styles.cameraCard, isOnline ? styles.cardOnline : styles.cardOffline]}>
-        
+
         <View style={styles.feedContainer}>
           <MjpegFeed
             uri={feedUri}
             style={styles.feedImage}
             resizeMode="cover"
           />
-          
+
           <View style={styles.badgeRow}>
             <View style={[
               styles.statusBadge,
@@ -143,6 +144,14 @@ export default function CamarasScreen() {
                 {item.location || 'Local Host'}
               </Text>
             </View>
+            {isOnline && (
+              <TouchableOpacity
+                style={styles.fullscreenIconContainer}
+                onPress={() => setSelectedCameraForFullView(item)}
+              >
+                <Maximize2 size={12} color="#fff" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -192,9 +201,9 @@ export default function CamarasScreen() {
             columnWrapperStyle={styles.gridRow}
             contentContainerStyle={styles.listContent}
             refreshControl={
-              <RefreshControl 
-                refreshing={refreshing} 
-                onRefresh={onRefresh} 
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
                 tintColor="#1fb2c5"
                 colors={['#1fb2c5']}
               />
@@ -222,7 +231,7 @@ export default function CamarasScreen() {
             <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
                 <Text style={styles.modalTitle}>Connect Security Camera</Text>
-                
+
                 <Text style={styles.inputLabel}>Camera Name *</Text>
                 <TextInput
                   style={styles.input}
@@ -253,15 +262,15 @@ export default function CamarasScreen() {
                 />
 
                 <View style={styles.modalButtons}>
-                  <TouchableOpacity 
-                    style={[styles.modalButton, styles.cancelButton]} 
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.cancelButton]}
                     onPress={() => setModalVisible(false)}
                     disabled={adding}
                   >
                     <Text style={styles.cancelButtonText}>Cancel</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.modalButton, styles.connectButton]} 
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.connectButton]}
                     onPress={handleAddCamera}
                     disabled={adding}
                   >
@@ -270,6 +279,41 @@ export default function CamarasScreen() {
                     </Text>
                   </TouchableOpacity>
                 </View>
+              </View>
+            </View>
+          </Modal>
+
+          <Modal
+            animationType="fade"
+            transparent={true}
+            visible={selectedCameraForFullView !== null}
+            onRequestClose={() => setSelectedCameraForFullView(null)}
+          >
+            <View style={styles.fullScreenOverlay}>
+              <View style={styles.fullScreenContent}>
+                {selectedCameraForFullView && (
+                  <>
+                    <View style={styles.fullScreenHeader}>
+                      <View>
+                        <Text style={styles.fullScreenTitle}>{selectedCameraForFullView.name}</Text>
+                        <Text style={styles.fullScreenSubtitle}>{selectedCameraForFullView.location || 'Local Host'}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.closeFullScreenButton}
+                        onPress={() => setSelectedCameraForFullView(null)}
+                      >
+                        <Text style={styles.closeFullScreenText}>Close</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.fullScreenFeedContainer}>
+                      <MjpegFeed
+                        uri={`${BASE_URL}/cameras/${selectedCameraForFullView.id}/feed?t=${Date.now()}`}
+                        style={styles.fullScreenFeedImage}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  </>
+                )}
               </View>
             </View>
           </Modal>
@@ -309,7 +353,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#1fb2c5', 
+    color: '#1fb2c5',
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     marginBottom: 2,
@@ -347,12 +391,12 @@ const styles = StyleSheet.create({
   },
   cameraCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12, 
+    borderRadius: 12,
     marginBottom: 16,
     flex: 1,
     maxWidth: '31.3%',
     marginHorizontal: '1%',
-    borderWidth: 1, 
+    borderWidth: 1,
     overflow: 'hidden',
     shadowColor: '#0f172a',
     shadowOffset: { width: 0, height: 2 },
@@ -361,13 +405,13 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   cardOnline: {
-    borderColor: '#e2e8f0', 
+    borderColor: '#e2e8f0',
   },
   cardOffline: {
-    borderColor: '#fca5a5', 
+    borderColor: '#fca5a5',
   },
   feedContainer: {
-    height: 250, 
+    height: 250,
     backgroundColor: '#f1f5f9',
     position: 'relative',
     overflow: 'hidden',
@@ -441,12 +485,21 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     padding: 8,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)', 
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  fullscreenIconContainer: {
+    padding: 4,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
+    flex: 1,
   },
   overlayLocationText: {
     color: '#f8fafc',
@@ -572,5 +625,59 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#ffffff',
+  },
+  fullScreenOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullScreenContent: {
+    width: '90%',
+    height: '80%',
+    backgroundColor: '#0f172a',
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  fullScreenHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+  },
+  fullScreenTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  fullScreenSubtitle: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  closeFullScreenButton: {
+    backgroundColor: '#334155',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  closeFullScreenText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  fullScreenFeedContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullScreenFeedImage: {
+    width: '100%',
+    height: '100%',
   },
 });
