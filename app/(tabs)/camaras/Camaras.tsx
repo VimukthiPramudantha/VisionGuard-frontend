@@ -218,13 +218,14 @@ export default function CamarasScreen() {
                   if (!activeCam) return null;
                   const isOnline = activeCam.status === 'online';
                   const isFullView = selectedCameraForFullView?.id === activeCam.id;
-                  const feedUri = `${BASE_URL}/cameras/${activeCam.id}/feed?t=${Date.now()}`;
+                  const feedUri = `${BASE_URL}/cameras/${activeCam.id}/feed?t=${activeCam.last_active || 'static'}`;
 
                   return (
                     <View style={styles.activeFeedCard}>
                       <View style={styles.activeFeedContainer}>
                         {isOnline && !isFullView ? (
                           <MjpegFeed
+                            key={activeCam.id}
                             uri={feedUri}
                             style={styles.activeFeedImage}
                             resizeMode="contain"
