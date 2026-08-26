@@ -21,6 +21,7 @@ import MjpegFeed from '../../../components/common/MjpegFeed';
 import { alertOrToast } from '../Face_recognition/utils';
 
 const BASE_URL = api.defaults.baseURL || (Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000');
+const WS_BASE_URL = BASE_URL.replace(/^http/, 'ws');
 
 interface Camera {
   id: string;
@@ -112,7 +113,7 @@ export default function CamarasScreen() {
   const renderCamera = ({ item }: { item: Camera }) => {
     const isOnline = item.status === 'online';
     const isFullView = selectedCameraForFullView?.id === item.id;
-    const feedUri = `${BASE_URL}/cameras/${item.id}/feed?t=${Date.now()}`;
+    const feedUri = `${WS_BASE_URL}/cameras/${item.id}/ws`;
 
     return (
       <View style={[styles.cameraCard, isOnline ? styles.cardOnline : styles.cardOffline]}>
@@ -163,7 +164,7 @@ export default function CamarasScreen() {
                 style={styles.fullscreenIconContainer}
                 onPress={() => {
                   setSelectedCameraForFullView(item);
-                  setFullscreenUri(`${BASE_URL}/cameras/${item.id}/feed?t=${Date.now()}`);
+                  setFullscreenUri(`${WS_BASE_URL}/cameras/${item.id}/ws`);
                 }}
               >
                 <Maximize2 size={12} color="#fff" />
@@ -218,7 +219,7 @@ export default function CamarasScreen() {
                   if (!activeCam) return null;
                   const isOnline = activeCam.status === 'online';
                   const isFullView = selectedCameraForFullView?.id === activeCam.id;
-                  const feedUri = `${BASE_URL}/cameras/${activeCam.id}/feed?t=${activeCam.last_active || 'static'}`;
+                  const feedUri = `${WS_BASE_URL}/cameras/${activeCam.id}/ws`;
 
                   return (
                     <View style={styles.activeFeedCard}>
@@ -269,7 +270,7 @@ export default function CamarasScreen() {
                               style={styles.fullscreenIconContainer}
                               onPress={() => {
                                 setSelectedCameraForFullView(activeCam);
-                                setFullscreenUri(`${BASE_URL}/cameras/${activeCam.id}/feed?t=${Date.now()}`);
+                                setFullscreenUri(`${WS_BASE_URL}/cameras/${activeCam.id}/ws`);
                               }}
                             >
                               <Maximize2 size={14} color="#fff" />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Platform, Image, StyleSheet, ViewStyle, ImageStyle } from 'react-native';
+import { Platform, Image, StyleSheet, View, Text, ViewStyle, ImageStyle } from 'react-native';
 
 interface MjpegFeedProps {
   uri: string;
@@ -14,7 +14,13 @@ export default function MjpegFeed({
   resizeMode = 'cover',
   refreshIntervalMs = 1000,
 }: MjpegFeedProps) {
+  const isWs = uri.startsWith('ws://') || uri.startsWith('wss://');
+
+  // For Web (HTML native support)
   if (Platform.OS === 'web') {
+    if (isWs) {
+      return <WebSocketImage uri={uri} style={style} resizeMode={resizeMode} />;
+    }
     return React.createElement('img', {
       src: uri,
       style: Object.assign(
@@ -24,6 +30,12 @@ export default function MjpegFeed({
     });
   }
 
+  // If it's a websocket stream (ideal for Mobile real-time update)
+  if (isWs) {
+    return <WebSocketImage uri={uri} style={style} resizeMode={resizeMode} />;
+  }
+
+  // Fallback to legacy polling HTTP Mjpeg feed for standard urls
   const [frameUri, setFrameUri] = useState(uri + '&_t=' + Date.now());
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -45,3 +57,98 @@ export default function MjpegFeed({
     />
   );
 }
+
+// WebSocket connection handler component using Double Buffering to prevent flickering
+function WebSocketImage({
+  uri,
+  style,
+  resizeMode,
+}: {
+  uri: string;
+  style?: any;
+  resizeMode: any;
+}) {
+  const [currentFrame, setCurrentFrame] = useState<string | null>(null);
+  const [nextFrame, setNextFrame] = useState<string | null>(null);
+  const [status, setStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
+  const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    let reconnectTimer: ReturnType<typeof setTimeout>;
+
+    function connect() {
+      if (!active) return;
+      setStatus('connecting');
+
+      const ws = new WebSocket(uri);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        if (active) setStatus('connected');
+      };
+
+      ws.onmessage = (event) => {
+        if (active && event.data) {
+          // Double-buffering: set the next frame to load
+          setNextFrame(`data:image/jpeg;base64,${event.data}`);
+        }
+      };
+
+      ws.onerror = (e) => {
+        console.warn('[WS Feed] Connection error:', e);
+        if (active) setStatus('error');
+      };
+
+      ws.onclose = () => {
+        if (active) {
+          setStatus('connecting');
+          reconnectTimer = setTimeout(connect, 2000);
+        }
+      };
+    }
+
+    connect();
+
+    return () => {
+      active = false;
+      clearTimeout(reconnectTimer);
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [uri]);
+
+  const flattenedStyle = StyleSheet.flatten(style) || {};
+
+  return (
+    <View style={[flattenedStyle, { backgroundColor: '#000', overflow: 'hidden' }]}>
+      {nextFrame ? (
+        <Image
+          source={{ uri: nextFrame }}
+          style={[StyleSheet.absoluteFillObject]}
+          resizeMode={resizeMode}
+        />
+      ) : (
+        <View style={[StyleSheet.absoluteFillObject, styles.placeholder]}>
+          <Text style={styles.placeholderText}>
+            {status === 'connecting' ? 'Connecting stream...' : 'Feed connection error'}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  placeholder: {
+    backgroundColor: '#0f172a',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  placeholderText: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+});
