@@ -44,7 +44,7 @@ export default function FloatingNavBar() {
             >
               <item.icon 
                 size={20} 
-                color="#00000060" 
+                color={isActive ? '#FFFFFF' : '#07060683'}
                 strokeWidth={2.2}
               />
               <View style={[
@@ -95,8 +95,9 @@ const styles = StyleSheet.create({
         `,
       } as any,
       default: {
-        backgroundColor: 'rgba(15, 23, 42, 0.85)',
-        borderColor: 'rgba(255, 255, 255, 0.08)',
+        backgroundColor: 'rgba(220, 232, 248, 0.92)',
+        border:'1px',
+        borderColor: 'rgba(59, 59, 59, 0.21)',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 12 },
         shadowOpacity: 0.25,
@@ -133,7 +134,7 @@ const styles = StyleSheet.create({
       } as any,
       default: {
         color:"white",
-        backgroundColor: PRIMARY_COLOR,
+        backgroundColor: '#000205a8',
       },
     }),
   },
@@ -175,10 +176,10 @@ const styles = StyleSheet.create({
     color: '#000000a2',
   },
   activeLabel: {
-    color: '#0000008c',
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   hoveredLabel: {
     color: '#000000a2',
-  },
+  }
 });
