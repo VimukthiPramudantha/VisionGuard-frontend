@@ -80,10 +80,14 @@ export default function CamarasScreen() {
     const containerWidth = rect.width;
     const containerHeight = rect.height;
 
-    const naturalWidth = img.naturalWidth || 640;
-    const naturalHeight = img.naturalHeight || 480;
+    const ratioAttr = container.getAttribute('data-video-aspect-ratio');
+    let imageRatio = 16 / 9;
+    if (ratioAttr) {
+      imageRatio = parseFloat(ratioAttr);
+    } else if (img.naturalWidth && img.naturalHeight) {
+      imageRatio = img.naturalWidth / img.naturalHeight;
+    }
 
-    const imageRatio = naturalWidth / naturalHeight;
     const containerRatio = containerWidth / containerHeight;
 
     let actualWidth = containerWidth;

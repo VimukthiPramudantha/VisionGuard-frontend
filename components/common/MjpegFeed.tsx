@@ -140,6 +140,15 @@ function WebSocketImage({
         {currentFrame && (
           <img
             src={currentFrame}
+            onLoad={(e) => {
+              const img = e.currentTarget;
+              if (img.naturalWidth && img.naturalHeight) {
+                const container = img.closest('[data-fullscreen-container]');
+                if (container) {
+                  container.setAttribute('data-video-aspect-ratio', (img.naturalWidth / img.naturalHeight).toString());
+                }
+              }
+            }}
             style={{
               width: '100%',
               height: '100%',
