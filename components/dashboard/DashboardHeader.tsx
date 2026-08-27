@@ -27,24 +27,27 @@ export default function DashboardHeader({ userName, isOnline }: Props) {
 
   return (
     <View style={styles.header}>
-      <View style={styles.headerLeft}>
-        <Image
-          source={require('../../assets/VG_Logo.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-        <View>
-          <Text style={styles.greeting}>
-            {getGreeting()}{firstName ? `, ${firstName}` : ''}
+      <View style={styles.topRow}>
+        <View style={styles.brandRow}>
+          <Image
+            source={require('../../assets/VG_Logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.brandName}>VisionGuard</Text>
+        </View>
+        <View style={styles.statusPill}>
+          <View style={[styles.statusDot, isOnline ? styles.dotGreen : styles.dotRed]} />
+          <Text style={styles.statusLabel}>
+            {isOnline ? 'System Online' : 'Offline'}
           </Text>
-          <Text style={styles.dateText}>{formatDate()}</Text>
         </View>
       </View>
-      <View style={styles.statusPill}>
-        <View style={[styles.statusDot, isOnline ? styles.dotGreen : styles.dotRed]} />
-        <Text style={styles.statusLabel}>
-          {isOnline ? 'System Online' : 'Offline'}
+      <View style={styles.greetingRow}>
+        <Text style={styles.greeting}>
+          {getGreeting()}{firstName ? `, ${firstName}` : ''} 👋
         </Text>
+        <Text style={styles.dateText}>{formatDate()}</Text>
       </View>
     </View>
   );
@@ -52,43 +55,55 @@ export default function DashboardHeader({ userName, isOnline }: Props) {
 
 const styles = StyleSheet.create({
   header: {
+    paddingHorizontal: 24,
+    paddingTop: Platform.OS === 'web' ? 28 : 48,
+    paddingBottom: 6,
+  },
+  topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'web' ? 32 : 16,
-    paddingBottom: 8,
   },
-  headerLeft: {
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
   },
   logo: {
     width: 52,
     height: 52,
     borderRadius: 14,
   },
-  greeting: {
+  brandName: {
     fontSize: 22,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: -0.5,
+  },
+  greetingRow: {
+    marginTop: 18,
+    marginBottom: 4,
+  },
+  greeting: {
+    fontSize: 26,
     fontWeight: '700',
     color: '#1e293b',
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
   },
   dateText: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#94a3b8',
     fontWeight: '500',
-    marginTop: 2,
+    marginTop: 4,
   },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ffffff',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 20,
-    gap: 6,
+    gap: 7,
     ...Platform.select({
       web: {
         boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
@@ -103,8 +118,8 @@ const styles = StyleSheet.create({
     }),
   },
   statusDot: {
-    width: 7,
-    height: 7,
+    width: 8,
+    height: 8,
     borderRadius: 4,
   },
   dotGreen: {

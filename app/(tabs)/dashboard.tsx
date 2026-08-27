@@ -14,14 +14,18 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../../services/api';
 import FloatingNavBar from '../../components/common/FloatingNavBar';
-import { ChevronRight } from 'lucide-react-native';
-
-// Imported modular components
 import DashboardHeader from '../../components/dashboard/DashboardHeader';
 import StatsRow from '../../components/dashboard/StatsRow';
 import LiveFeeds from '../../components/dashboard/LiveFeeds';
 import RecentAlerts from '../../components/dashboard/RecentAlerts';
+import SectionHeader from '../../components/dashboard/SectionHeader';
 import { CameraItem, AlertItem } from '../../components/dashboard/types';
+import {
+  Camera,
+  Bell,
+  Settings,
+  Users,
+} from 'lucide-react-native';
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -82,15 +86,36 @@ export default function DashboardScreen() {
   const onlineCams = cameras.filter(c => c.status === 'online').length;
   const unreadAlerts = alerts.filter(a => a.status === 'unread').length;
 
-  const SectionHeader = ({ title, onViewAll }: { title: string; onViewAll: () => void }) => (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <TouchableOpacity style={styles.viewAllBtn} onPress={onViewAll} activeOpacity={0.6}>
-        <Text style={styles.viewAllText}>View All</Text>
-        <ChevronRight size={14} color="#1fb2c5" />
-      </TouchableOpacity>
-    </View>
-  );
+  const quickActions = [
+    {
+      label: 'Cameras',
+      icon: Camera,
+      color: '#0ea5e9',
+      bg: '#f0f9ff',
+      route: '/(tabs)/camaras/Camaras',
+    },
+    {
+      label: 'Alerts',
+      icon: Bell,
+      color: '#ef4444',
+      bg: '#fef2f2',
+      route: '/(tabs)/alerts',
+    },
+    {
+      label: 'Face Recog',
+      icon: Users,
+      color: '#8b5cf6',
+      bg: '#f5f3ff',
+      route: '/(tabs)/Face_recognition',
+    },
+    {
+      label: 'Settings',
+      icon: Settings,
+      color: '#64748b',
+      bg: '#f8fafc',
+      route: '/(tabs)/Settings/settings',
+    },
+  ];
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -98,37 +123,64 @@ export default function DashboardScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <DashboardHeader userName={userName} isOnline={onlineCams > 0} />
+        <DashboardHeader
+          userName={userName}
+          isOnline={onlineCams > 0}
+        />
 
         <View style={isWeb ? styles.contentWeb : styles.contentMobile}>
-          <StatsRow 
-            totalCameras={cameras.length} 
-            onlineCameras={onlineCams} 
-            unreadAlerts={unreadAlerts} 
+          {/* Stats */}
+          <StatsRow
+            totalCameras={cameras.length}
+            onlineCameras={onlineCams}
+            unreadAlerts={unreadAlerts}
           />
 
+          {/* Quick Actions */}
+          <View style={styles.quickSection}>
+            <Text style={styles.quickTitle}>Quick Actions</Text>
+            <View style={styles.quickRow}>
+              {quickActions.map((action) => (
+                <TouchableOpacity
+                  key={action.label}
+                  style={styles.quickCard}
+                  // @ts-ignore
+                  onPress={() => router.replace(action.route)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.quickIcon, { backgroundColor: action.bg }]}>
+                    <action.icon size={20} color={action.color} />
+                  </View>
+                  <Text style={styles.quickLabel}>{action.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Live Feeds */}
           <View style={styles.section}>
             <SectionHeader
               title="Live Feeds"
               onViewAll={() => router.replace('/(tabs)/camaras/Camaras')}
             />
-            <LiveFeeds 
-              cameras={cameras} 
-              loading={loadingCams} 
-              isWeb={isWeb} 
-              onAddCamera={() => router.replace('/(tabs)/camaras/Camaras')} 
+            <LiveFeeds
+              cameras={cameras}
+              loading={loadingCams}
+              isWeb={isWeb}
+              onAddCamera={() => router.replace('/(tabs)/camaras/Camaras')}
             />
           </View>
 
+          {/* Recent Alerts */}
           <View style={styles.section}>
             <SectionHeader
               title="Recent Alerts"
               onViewAll={() => router.replace('/(tabs)/alerts')}
             />
-            <RecentAlerts 
-              alerts={alerts} 
-              loading={loadingAlerts} 
-              onViewAlert={() => router.replace('/(tabs)/alerts')} 
+            <RecentAlerts
+              alerts={alerts}
+              loading={loadingAlerts}
+              onViewAlert={() => router.replace('/(tabs)/alerts')}
             />
           </View>
         </View>
@@ -158,26 +210,55 @@ const styles = StyleSheet.create({
   section: {
     marginTop: 28,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
+
+  // Quick Actions
+  quickSection: {
+    marginTop: 24,
   },
-  sectionTitle: {
+  quickTitle: {
     fontSize: 17,
     fontWeight: '700',
     color: '#1e293b',
     letterSpacing: -0.2,
+    marginBottom: 14,
   },
-  viewAllBtn: {
+  quickRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
+    gap: 12,
   },
-  viewAllText: {
-    fontSize: 13,
-    color: '#1fb2c5',
+  quickCard: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+        transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+        cursor: 'pointer',
+      } as any,
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 1,
+      },
+    }),
+  },
+  quickIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  quickLabel: {
+    fontSize: 12,
     fontWeight: '600',
+    color: '#475569',
   },
 });
