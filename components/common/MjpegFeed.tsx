@@ -16,7 +16,6 @@ export default function MjpegFeed({
 }: MjpegFeedProps) {
   const isWs = uri.startsWith('ws://') || uri.startsWith('wss://');
 
-  // For Web (HTML native support)
   if (Platform.OS === 'web') {
     if (isWs) {
       return <WebSocketImage uri={uri} style={style} resizeMode={resizeMode} />;
@@ -30,12 +29,10 @@ export default function MjpegFeed({
     });
   }
 
-  // If it's a websocket stream (ideal for Mobile real-time update)
   if (isWs) {
     return <WebSocketImage uri={uri} style={style} resizeMode={resizeMode} />;
   }
 
-  // Fallback to legacy polling HTTP Mjpeg feed for standard urls
   const [frameUri, setFrameUri] = useState(uri + '&_t=' + Date.now());
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -58,7 +55,6 @@ export default function MjpegFeed({
   );
 }
 
-// WebSocket connection handler component using Double Buffering to prevent flickering
 function WebSocketImage({
   uri,
   style,
