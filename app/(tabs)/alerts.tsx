@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   X,
   ShieldAlert,
+  Trash2,
 } from 'lucide-react-native';
 
 interface AlertItem {
@@ -47,6 +48,7 @@ export default function AlertsScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const [selectedAlert, setSelectedAlert] = useState<AlertItem | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchUserAndAlerts = async () => {
     try {
@@ -94,6 +96,20 @@ export default function AlertsScreen() {
       } catch (error) {
         console.error('Failed to mark alert as read:', error);
       }
+    }
+  };
+
+  const handleDeleteAlert = async (alertId: string) => {
+    setDeleting(true);
+    try {
+      await api.delete(`/alerts/${alertId}`);
+      setAlerts((prevAlerts) => prevAlerts.filter((item) => item.id !== alertId));
+      setModalVisible(false);
+      setSelectedAlert(null);
+    } catch (error) {
+      console.error('Failed to delete alert:', error);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -248,6 +264,21 @@ export default function AlertsScreen() {
                     </Text>
                   </View>
                 </View>
+
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => handleDeleteAlert(selectedAlert.id)}
+                  disabled={deleting}
+                >
+                  {deleting ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <>
+                      <Trash2 size={16} color="#ffffff" style={{ marginRight: 8 }} />
+                      <Text style={styles.deleteButtonText}>Delete Alert Record</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
               </View>
             )}
           </View>
@@ -505,5 +536,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#0f172a',
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ef4444',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginTop: 16,
+    width: '100%',
+  },
+  deleteButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
