@@ -1,5 +1,5 @@
 // app/(tabs)/camaras/Camaras.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,13 +12,18 @@ import {
   Modal,
   TextInput,
 } from 'react-native';
-import { Plus, Video, Radio, Shield, MapPin, RefreshCw, Maximize2 } from 'lucide-react-native';
+import { Plus, Video, Radio, Shield, MapPin, RefreshCw, Maximize2, PenTool, Trash2, Save, AlertTriangle } from 'lucide-react-native';
 import { api } from '../../../services/api';
 import FloatingNavBar from '../../../components/common/FloatingNavBar';
 import LoadingAnimation from '../../../components/common/LoadingAnimation';
 import InfoTooltip from '../../../components/common/InfoTooltip';
 import MjpegFeed from '../../../components/common/MjpegFeed';
 import { alertOrToast } from '../Face_recognition/utils';
+
+interface ZonePoint {
+  x: number; 
+  y: number; 
+}
 
 const BASE_URL = api.defaults.baseURL || (Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000');
 const WS_BASE_URL = BASE_URL.replace(/^http/, 'ws');
@@ -48,6 +53,13 @@ export default function CamarasScreen() {
   const [fullscreenUri, setFullscreenUri] = useState<string>('');
   const [activeCameraIndex, setActiveCameraIndex] = useState<number>(0);
 
+  const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const [zonePoints, setZonePoints] = useState<ZonePoint[]>([]);
+  const [savedZone, setSavedZone] = useState<ZonePoint[] | null>(null);
+  const [zoneAlert, setZoneAlert] = useState<{ label: string; timestamp: string } | null>(null);
+  const feedContainerRef = useRef<View>(null);
+  const fullscreenWsRef = useRef<WebSocket | null>(null);
+
   useEffect(() => {
     const timer = setTimeout(() => setMinTimeDone(true), 2000);
     return () => clearTimeout(timer);
@@ -75,6 +87,115 @@ export default function CamarasScreen() {
   useEffect(() => {
     fetchCameras();
   }, []);
+
+  useEffect(() => {
+    if (!selectedCameraForFullView) {
+      if (fullscreenWsRef.current) {
+        fullscreenWsRef.current.close();
+        fullscreenWsRef.current = null;
+      }
+      setIsDrawingMode(false);
+      setZonePoints([]);
+      setZoneAlert(null);
+      return;
+    }
+
+    const wsUrl = `${WS_BASE_URL}/cameras/${selectedCameraForFullView.id}/ws`;
+    
+    const ws = new WebSocket(wsUrl);
+    fullscreenWsRef.current = ws;
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'zone_alert') {
+          const names = data.intruders.map((i: any) => i.label).join(', ');
+          setZoneAlert({
+            label: names,
+            timestamp: new Date().toLocaleTimeString(),
+          });
+        }
+      } catch {
+      }
+    };
+
+    (async () => {
+      try {
+        const res = await api.get(`/cameras/${selectedCameraForFullView.id}/zone`);
+        if (res.data?.points && res.data.points.length >= 3) {
+          setSavedZone(res.data.points);
+        } else {
+          setSavedZone(null);
+        }
+      } catch {
+        setSavedZone(null);
+      }
+    })();
+
+    return () => {
+      if (ws) {
+        ws.close();
+      }
+    };
+  }, [selectedCameraForFullView]);
+
+  useEffect(() => {
+    if (!zoneAlert) return;
+    const t = setTimeout(() => setZoneAlert(null), 4000);
+    return () => clearTimeout(t);
+  }, [zoneAlert]);
+
+  const handleFeedClick = useCallback(
+    (event: any) => {
+      if (!isDrawingMode || Platform.OS !== 'web') return;
+
+      const rect = (event.target as HTMLElement)?.closest?.('[data-zone-canvas]')?.getBoundingClientRect?.();
+      if (!rect) return;
+
+      const x = (event.clientX - rect.left) / rect.width;
+      const y = (event.clientY - rect.top) / rect.height;
+
+      if (x < 0 || x > 1 || y < 0 || y > 1) return;
+
+      setZonePoints((prev) => [...prev, { x, y }]);
+    },
+    [isDrawingMode],
+  );
+
+  const saveZone = useCallback(async () => {
+    if (!selectedCameraForFullView || zonePoints.length < 3) {
+      alertOrToast('Error', 'Draw at least 3 points to define a zone', 'error');
+      return;
+    }
+
+    try {
+      await api.post(`/cameras/${selectedCameraForFullView.id}/zone`, {
+        points: zonePoints,
+      });
+      setSavedZone([...zonePoints]);
+      setZonePoints([]);
+      setIsDrawingMode(false);
+      alertOrToast('Success', 'Detection zone saved! Intrusions will be captured automatically.', 'success');
+    } catch (err) {
+      console.error(err);
+      alertOrToast('Error', 'Failed to save zone', 'error');
+    }
+  }, [selectedCameraForFullView, zonePoints]);
+
+  const clearZone = useCallback(async () => {
+    if (!selectedCameraForFullView) return;
+
+    try {
+      await api.delete(`/cameras/${selectedCameraForFullView.id}/zone`);
+      setSavedZone(null);
+      setZonePoints([]);
+      setIsDrawingMode(false);
+      alertOrToast('Info', 'Detection zone removed', 'success');
+    } catch (err) {
+      console.error(err);
+      alertOrToast('Error', 'Failed to clear zone', 'error');
+    }
+  }, [selectedCameraForFullView]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -412,19 +533,181 @@ export default function CamarasScreen() {
                         <Text style={styles.fullScreenTitle}>{selectedCameraForFullView.name}</Text>
                         <Text style={styles.fullScreenSubtitle}>{selectedCameraForFullView.location || 'Local Host'}</Text>
                       </View>
-                      <TouchableOpacity
-                        style={styles.closeFullScreenButton}
-                        onPress={() => setSelectedCameraForFullView(null)}
-                      >
-                        <Text style={styles.closeFullScreenText}>Close</Text>
-                      </TouchableOpacity>
+                      <View style={styles.fullScreenHeaderActions}>
+                        <TouchableOpacity
+                          style={[
+                            styles.zoneButton,
+                            isDrawingMode && styles.zoneButtonActive,
+                          ]}
+                          onPress={() => {
+                            if (isDrawingMode) {
+                              setIsDrawingMode(false);
+                              setZonePoints([]);
+                            } else {
+                              setIsDrawingMode(true);
+                              setZonePoints([]);
+                            }
+                          }}
+                        >
+                          <PenTool size={14} color={isDrawingMode ? '#0f172a' : '#fff'} />
+                          <Text style={[
+                            styles.zoneButtonText,
+                            isDrawingMode && styles.zoneButtonTextActive,
+                          ]}>
+                            {isDrawingMode ? 'Cancel' : 'Draw Zone'}
+                          </Text>
+                        </TouchableOpacity>
+
+                        {isDrawingMode && zonePoints.length >= 3 && (
+                          <TouchableOpacity
+                            style={[styles.zoneButton, styles.zoneButtonSave]}
+                            onPress={saveZone}
+                          >
+                            <Save size={14} color="#fff" />
+                            <Text style={styles.zoneButtonText}>Save Zone</Text>
+                          </TouchableOpacity>
+                        )}
+
+                        {savedZone && !isDrawingMode && (
+                          <TouchableOpacity
+                            style={[styles.zoneButton, styles.zoneButtonClear]}
+                            onPress={clearZone}
+                          >
+                            <Trash2 size={14} color="#fff" />
+                            <Text style={styles.zoneButtonText}>Clear Zone</Text>
+                          </TouchableOpacity>
+                        )}
+
+                        <TouchableOpacity
+                          style={styles.closeFullScreenButton}
+                          onPress={() => setSelectedCameraForFullView(null)}
+                        >
+                          <Text style={styles.closeFullScreenText}>Close</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
+                    {isDrawingMode && (
+                      <View style={styles.drawingBanner}>
+                        <PenTool size={14} color="#f59e0b" />
+                        <Text style={styles.drawingBannerText}>
+                          Click on the video to place polygon points ({zonePoints.length} placed)
+                          {zonePoints.length >= 3 ? ' — Ready to save!' : ' — Need at least 3'}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Zone alert banner */}
+                    {zoneAlert && (
+                      <View style={styles.alertBanner}>
+                        <AlertTriangle size={16} color="#ef4444" />
+                        <Text style={styles.alertBannerText}>
+                          ⚠️ Intrusion detected: {zoneAlert.label} entered the zone!
+                        </Text>
+                      </View>
+                    )}
+
                     <View style={styles.fullScreenFeedContainer}>
                       <MjpegFeed
                         uri={fullscreenUri}
                         style={styles.fullScreenFeedImage}
                         resizeMode="contain"
                       />
+
+                      {Platform.OS === 'web' && (isDrawingMode || savedZone) && (
+                        React.createElement('div', {
+                          'data-zone-canvas': 'true',
+                          onClick: handleFeedClick,
+                          style: {
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            cursor: isDrawingMode ? 'crosshair' : 'default',
+                            zIndex: 10,
+                          },
+                        },
+                          React.createElement('svg', {
+                            style: {
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              width: '100%',
+                              height: '100%',
+                              pointerEvents: 'none',
+                            },
+                            viewBox: '0 0 1 1',
+                            preserveAspectRatio: 'none',
+                          },
+                            savedZone && !isDrawingMode && savedZone.length >= 3 && React.createElement('polygon', {
+                              key: 'saved-zone',
+                              points: savedZone.map(p => `${p.x},${p.y}`).join(' '),
+                              fill: 'rgba(0, 200, 255, 0.15)',
+                              stroke: '#00c8ff',
+                              strokeWidth: '0.003',
+                              strokeDasharray: '0.01,0.006',
+                            }),
+
+                            isDrawingMode && zonePoints.length >= 2 && React.createElement('polyline', {
+                              key: 'drawing-lines',
+                              points: zonePoints.map(p => `${p.x},${p.y}`).join(' '),
+                              fill: 'none',
+                              stroke: '#f59e0b',
+                              strokeWidth: '0.003',
+                            }),
+
+                            isDrawingMode && zonePoints.length >= 3 && React.createElement('line', {
+                              key: 'closing-line',
+                              x1: zonePoints[zonePoints.length - 1].x,
+                              y1: zonePoints[zonePoints.length - 1].y,
+                              x2: zonePoints[0].x,
+                              y2: zonePoints[0].y,
+                              stroke: '#f59e0b',
+                              strokeWidth: '0.002',
+                              strokeDasharray: '0.008,0.004',
+                              opacity: 0.6,
+                            }),
+
+                            isDrawingMode && zonePoints.length >= 3 && React.createElement('polygon', {
+                              key: 'drawing-fill',
+                              points: zonePoints.map(p => `${p.x},${p.y}`).join(' '),
+                              fill: 'rgba(245, 158, 11, 0.12)',
+                              stroke: 'none',
+                            }),
+
+                            isDrawingMode && zonePoints.map((p, i) =>
+                              React.createElement('circle', {
+                                key: `pt-${i}`,
+                                cx: p.x,
+                                cy: p.y,
+                                r: '0.008',
+                                fill: i === 0 ? '#10b981' : '#f59e0b',
+                                stroke: '#fff',
+                                strokeWidth: '0.002',
+                              })
+                            ),
+
+                            savedZone && !isDrawingMode && savedZone.map((p, i) =>
+                              React.createElement('circle', {
+                                key: `sz-${i}`,
+                                cx: p.x,
+                                cy: p.y,
+                                r: '0.006',
+                                fill: '#00c8ff',
+                                stroke: '#fff',
+                                strokeWidth: '0.002',
+                              })
+                            ),
+                          ),
+                        )
+                      )}
+
+                      {savedZone && !isDrawingMode && (
+                        <View style={styles.zoneLabelBadge}>
+                          <View style={styles.zoneLabelDot} />
+                          <Text style={styles.zoneLabelText}>Detection Zone Active</Text>
+                        </View>
+                      )}
                     </View>
                   </>
                 )}
@@ -792,10 +1075,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
   fullScreenFeedImage: {
     width: '100%',
     height: '100%',
+  },
+  fullScreenHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   singleFeedLayout: {
     flex: 1,
@@ -902,5 +1191,94 @@ const styles = StyleSheet.create({
   },
   selectorButtonTextActive: {
     color: '#ffffff',
+  },
+
+  zoneButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  zoneButtonActive: {
+    backgroundColor: '#f59e0b',
+    borderColor: '#f59e0b',
+  },
+  zoneButtonSave: {
+    backgroundColor: '#10b981',
+    borderColor: '#10b981',
+  },
+  zoneButtonClear: {
+    backgroundColor: '#ef4444',
+    borderColor: '#ef4444',
+  },
+  zoneButtonText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  zoneButtonTextActive: {
+    color: '#0f172a',
+  },
+  drawingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(245, 158, 11, 0.3)',
+  },
+  drawingBannerText: {
+    color: '#f59e0b',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  alertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(239, 68, 68, 0.3)',
+  },
+  alertBannerText: {
+    color: '#ef4444',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  zoneLabelBadge: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0, 200, 255, 0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 200, 255, 0.4)',
+    zIndex: 20,
+  },
+  zoneLabelDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#00c8ff',
+  },
+  zoneLabelText: {
+    color: '#00c8ff',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 });
