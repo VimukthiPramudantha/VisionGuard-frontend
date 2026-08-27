@@ -1,6 +1,5 @@
-// components/dashboard/DashboardHeader.tsx
 import React from 'react';
-import { View, Text, Image, StyleSheet, Platform } from 'react-native';
+import { View, Text, Image, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 
 const getGreeting = (): string => {
   const hour = new Date().getHours();
@@ -24,6 +23,8 @@ interface Props {
 
 export default function DashboardHeader({ userName, isOnline }: Props) {
   const firstName = userName ? userName.split(' ')[0] : '';
+  const { width } = useWindowDimensions();
+  const isWeb = width >= 768;
 
   return (
     <View style={styles.header}>
@@ -31,23 +32,25 @@ export default function DashboardHeader({ userName, isOnline }: Props) {
         <View style={styles.brandRow}>
           <Image
             source={require('../../assets/VG_Logo.png')}
-            style={styles.logo}
+            style={[styles.logo, isWeb && styles.padLeft]}
             resizeMode="contain"
           />
           <Text style={styles.brandName}>VisionGuard</Text>
         </View>
         <View style={styles.statusPill}>
           <View style={[styles.statusDot, isOnline ? styles.dotGreen : styles.dotRed]} />
-          <Text style={styles.statusLabel}>
-            {isOnline ? 'System Online' : 'Offline'}
-          </Text>
+          {isWeb && (
+            <Text style={styles.statusLabel}>
+              {isOnline ? 'System Online' : 'Offline'}
+            </Text>
+          )}
         </View>
       </View>
       <View style={styles.greetingRow}>
-        <Text style={styles.greeting}>
-          {getGreeting()}{firstName ? `, ${firstName}` : ''} 👋
+        <Text style={[styles.greeting, isWeb && styles.padLeft]}>
+          {getGreeting()}{firstName ? `, ${firstName}` : ''} 
         </Text>
-        <Text style={styles.dateText}>{formatDate()}</Text>
+        <Text style={[styles.dateText, isWeb && styles.padLeft]}>{formatDate()}</Text>
       </View>
     </View>
   );
@@ -70,12 +73,15 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   logo: {
-    width: 52,
-    height: 52,
+    width: 120,
+    height: 120,
     borderRadius: 14,
   },
+  padLeft: {
+    paddingLeft: 10,
+  },
   brandName: {
-    fontSize: 22,
+    fontSize: 35,
     fontWeight: '800',
     color: '#0f172a',
     letterSpacing: -0.5,
