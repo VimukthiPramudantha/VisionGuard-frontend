@@ -15,6 +15,7 @@ import { CameraItem } from './types';
 import { api } from '../../services/api';
 
 const BASE_URL = api.defaults.baseURL || (Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000');
+const WS_BASE_URL = BASE_URL.replace(/^http/, 'ws');
 
 interface Props {
   cameras: CameraItem[];
@@ -26,7 +27,7 @@ interface Props {
 export default function LiveFeeds({ cameras, loading, isWeb, onAddCamera }: Props) {
   const renderCard = (camera: CameraItem) => {
     const isOnline = camera.status === 'online';
-    const feedUri = `${BASE_URL}/cameras/${encodeURIComponent(camera.id)}/feed?t=${Date.now()}`;
+    const feedUri = `${WS_BASE_URL}/cameras/${encodeURIComponent(camera.id)}/ws`;
     return (
       <View key={camera.id} style={isWeb ? styles.cardWeb : styles.card}>
         <View style={styles.feedBox}>
