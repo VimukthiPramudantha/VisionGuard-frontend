@@ -60,6 +60,68 @@ export default function CamarasScreen() {
   const feedContainerRef = useRef<View>(null);
   const fullscreenWsRef = useRef<WebSocket | null>(null);
 
+  const [videoLayout, setVideoLayout] = useState<{
+    width: number;
+    height: number;
+    left: number;
+    top: number;
+  } | null>(null);
+
+  const calculateVideoLayout = useCallback(() => {
+    if (Platform.OS !== 'web' || !selectedCameraForFullView) return;
+    
+    const container = document.querySelector('[data-fullscreen-container]');
+    if (!container) return;
+    
+    const img = container.querySelector('img');
+    if (!img) return;
+
+    const rect = container.getBoundingClientRect();
+    const containerWidth = rect.width;
+    const containerHeight = rect.height;
+
+    const naturalWidth = img.naturalWidth || 640;
+    const naturalHeight = img.naturalHeight || 480;
+
+    const imageRatio = naturalWidth / naturalHeight;
+    const containerRatio = containerWidth / containerHeight;
+
+    let actualWidth = containerWidth;
+    let actualHeight = containerHeight;
+    let left = 0;
+    let top = 0;
+
+    if (containerRatio > imageRatio) {
+      actualWidth = containerHeight * imageRatio;
+      left = (containerWidth - actualWidth) / 2;
+    } else {
+      actualHeight = containerWidth / imageRatio;
+      top = (containerHeight - actualHeight) / 2;
+    }
+
+    setVideoLayout({
+      width: actualWidth,
+      height: actualHeight,
+      left,
+      top,
+    });
+  }, [selectedCameraForFullView]);
+
+  useEffect(() => {
+    if (!selectedCameraForFullView) {
+      setVideoLayout(null);
+      return;
+    }
+
+    const interval = setInterval(calculateVideoLayout, 300);
+    window.addEventListener('resize', calculateVideoLayout);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('resize', calculateVideoLayout);
+    };
+  }, [selectedCameraForFullView, calculateVideoLayout]);
+
   useEffect(() => {
     const timer = setTimeout(() => setMinTimeDone(true), 2000);
     return () => clearTimeout(timer);
@@ -149,7 +211,7 @@ export default function CamarasScreen() {
     (event: any) => {
       if (!isDrawingMode || Platform.OS !== 'web') return;
 
-      const rect = (event.target as HTMLElement)?.closest?.('[data-zone-canvas]')?.getBoundingClientRect?.();
+      const rect = (event.currentTarget as HTMLElement)?.getBoundingClientRect?.();
       if (!rect) return;
 
       const x = (event.clientX - rect.left) / rect.width;
@@ -606,7 +668,7 @@ export default function CamarasScreen() {
                       </View>
                     )}
 
-                    <View style={styles.fullScreenFeedContainer}>
+                    <View style={styles.fullScreenFeedContainer} data-fullscreen-container="true">
                       <MjpegFeed
                         uri={fullscreenUri}
                         style={styles.fullScreenFeedImage}
@@ -619,10 +681,10 @@ export default function CamarasScreen() {
                           onClick: handleFeedClick,
                           style: {
                             position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
+                            left: videoLayout ? `${videoLayout.left}px` : '0px',
+                            top: videoLayout ? `${videoLayout.top}px` : '0px',
+                            width: videoLayout ? `${videoLayout.width}px` : '100%',
+                            height: videoLayout ? `${videoLayout.height}px` : '100%',
                             cursor: isDrawingMode ? 'crosshair' : 'default',
                             zIndex: 10,
                           },
