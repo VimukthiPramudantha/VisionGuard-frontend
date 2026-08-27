@@ -10,8 +10,11 @@ import {
   ActivityIndicator,
   Platform,
   Switch,
+  Image,
+  useWindowDimensions,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../../services/api';
 import FloatingNavBar from '../../components/common/FloatingNavBar';
 import MjpegFeed from '../../components/common/MjpegFeed';
@@ -25,7 +28,12 @@ import {
   RefreshCw, 
   Cpu, 
   BellRing,
-  AlertTriangle
+  AlertTriangle,
+  Clock,
+  ExternalLink,
+  CheckCircle,
+  Database,
+  Wifi
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
@@ -43,15 +51,21 @@ interface Camera {
 
 interface DetectionAlert {
   id: string;
-  cameraName: string;
-  detectedObject: string;
-  confidence: number;
-  time: string;
-  severity: 'low' | 'medium' | 'high';
+  user_id: string;
+  camera_id: string;
+  detection_event_id?: string;
+  snapshot_url?: string;
+  detection_type?: string;
+  confidence?: number;
+  status: 'read' | 'unread';
+  created_at?: string;
 }
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isWebLayout = width >= 768; // Web breakpoint
+
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState('');
@@ -61,25 +75,9 @@ export default function DashboardScreen() {
   const [muteNotifications, setMuteNotifications] = useState(false);
   const [diagnosticRunning, setDiagnosticRunning] = useState(false);
   const [systemLogs, setSystemLogs] = useState<string[]>([]);
-  
-  const [alerts, setAlerts] = useState<DetectionAlert[]>([
-    {
-      id: 'alert_1',
-      cameraName: 'Camera 01',
-      detectedObject: 'Person',
-      confidence: 94.2,
-      time: '12:05 PM',
-      severity: 'medium'
-    },
-    {
-      id: 'alert_2',
-      cameraName: 'Camera 03',
-      detectedObject: 'Unknown Face',
-      confidence: 88.7,
-      time: '11:42 AM',
-      severity: 'high'
-    }
-  ]);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<DetectionAlert[]>([]);
+  const [isAlertsLoading, setIsAlertsLoading] = useState(true);
 
   const triggerHaptic = (type: 'light' | 'medium' | 'success' | 'warning') => {
     try {
@@ -116,9 +114,37 @@ export default function DashboardScreen() {
     }
   };
 
+  const fetchRealAlerts = async (uid: string) => {
+    try {
+      setIsAlertsLoading(true);
+      const response = await api.get(`/alerts?user_id=${uid}`);
+      setAlerts(response.data.slice(0, 5));
+    } catch (error) {
+      console.error('Failed to load real alerts on dashboard:', error);
+    } finally {
+      setIsAlertsLoading(false);
+    }
+  };
+
+  const loadUserData = async () => {
+    try {
+      const userStr = await AsyncStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        if (user && user.id) {
+          setUserId(user.id);
+          fetchRealAlerts(user.id);
+        }
+      }
+    } catch (e) {
+      console.error('Error loading user data from AsyncStorage:', e);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       fetchCameras();
+      loadUserData();
     }, [])
   );
 
@@ -149,26 +175,25 @@ export default function DashboardScreen() {
     }, 3500);
   };
 
-  const simulateThreat = () => {
+  const simulateThreat = async () => {
     triggerHaptic('warning');
-    const randomCameras = cameras.length > 0 ? cameras.map(c => c.name) : ['Camera 01', 'Camera 02', 'Camera 03'];
-    const randomCam = randomCameras[Math.floor(Math.random() * randomCameras.length)];
+    const randomCameras = cameras.length > 0 ? cameras.map(c => c.id) : ['cctv_1', 'cctv_8', 'cctv_9'];
+    const randomCamId = randomCameras[Math.floor(Math.random() * randomCameras.length)];
     const objects = ['Person', 'Vehicle', 'Intruder', 'Unknown Face'];
     const randomObject = objects[Math.floor(Math.random() * objects.length)];
-    const confidence = parseFloat((80 + Math.random() * 19).toFixed(1));
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
+    const confidence = parseFloat((0.80 + Math.random() * 0.19).toFixed(4));
+    
     const newAlert: DetectionAlert = {
-      id: `alert_${Date.now()}`,
-      cameraName: randomCam,
-      detectedObject: randomObject,
+      id: `sim_${Date.now()}`,
+      user_id: userId || 'demo_user',
+      camera_id: randomCamId,
+      detection_type: randomObject,
       confidence,
-      time: timeStr,
-      severity: randomObject === 'Intruder' || randomObject === 'Unknown Face' ? 'high' : 'medium'
+      status: 'unread',
+      created_at: new Date().toISOString()
     };
 
-    setAlerts(prev => [newAlert, ...prev]);
+    setAlerts(prev => [newAlert, ...prev.slice(0, 4)]);
   };
 
   const clearAlerts = () => {
@@ -176,271 +201,430 @@ export default function DashboardScreen() {
     setAlerts([]);
   };
 
+  const formatTime = (isoString?: string) => {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Shared Components
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <View style={styles.headerTitleRow}>
+        <View style={styles.logoAndTextWrapper}>
+          <Image 
+            source={require('../../assets/VG_Logo.png')} 
+            style={styles.logoImage} 
+            resizeMode="contain"
+          />
+          <Text style={styles.brandTitleText}>VisionGuard</Text>
+        </View>
+        <View style={styles.systemPulseBadge}>
+          <View style={[styles.pulseOuterDot, aiShieldActive ? styles.pulseActiveColor : styles.pulseInactiveColor]}>
+            <View style={[styles.pulseInnerDot, aiShieldActive ? styles.dotActiveColor : styles.dotInactiveColor]} />
+          </View>
+          <Text style={styles.systemPulseText}>
+            {aiShieldActive ? 'SHIELD ONLINE' : 'SHIELD MUTED'}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+
+  const renderStatusBanner = () => (
+    <View style={styles.liveBannerCard}>
+      <View style={styles.liveClockSection}>
+        <Text style={styles.bannerClockText}>{currentTime || '--:--:--'}</Text>
+        <Text style={styles.bannerDateText}>{currentDate || 'Loading date...'}</Text>
+      </View>
+      <View style={styles.dividerVertical} />
+      <View style={styles.bannerStatusSection}>
+        <View style={styles.bannerRow}>
+          <Cpu size={14} color="#1fb2c5" />
+          <Text style={styles.bannerInfoTitle}>AI Inference</Text>
+        </View>
+        <Text style={styles.bannerInfoValue}>
+          {aiShieldActive ? 'YOLOv8 Active (12ms)' : 'Paused'}
+        </Text>
+      </View>
+    </View>
+  );
+
+  const renderLeftPanelExtra = () => (
+    <View style={styles.threatCard}>
+      <View style={styles.threatHeaderRow}>
+        <ShieldCheck size={20} color="#10b981" />
+        <Text style={styles.threatTitle}>Threat Assessment</Text>
+        <View style={styles.secureBadge}>
+          <Text style={styles.secureBadgeText}>SECURE</Text>
+        </View>
+      </View>
+      <Text style={styles.threatDesc}>
+        Real-time security analytics indicate zero active critical alarms. All boundary lines are secure.
+      </Text>
+      
+      <View style={styles.dividerHorizontal} />
+      
+      <Text style={styles.checklistTitle}>System Health Matrix</Text>
+      <View style={styles.checklistItem}>
+        <CheckCircle size={14} color="#10b981" />
+        <Text style={styles.checklistText}>YOLOv8 Inference Pipeline (Active)</Text>
+      </View>
+      <View style={styles.checklistItem}>
+        <Database size={14} color="#10b981" />
+        <Text style={styles.checklistText}>Supabase DB Connection (Healthy)</Text>
+      </View>
+      <View style={styles.checklistItem}>
+        <Wifi size={14} color="#10b981" />
+        <Text style={styles.checklistText}>MJPEG Video Streams Gateway (Connected)</Text>
+      </View>
+    </View>
+  );
+
+  const renderOperationsControl = () => (
+    <View style={styles.controlsCard}>
+      <View style={styles.controlRow}>
+        <View style={styles.controlInfo}>
+          <View style={styles.iconCircleTeal}>
+            <Sparkles size={18} color="#1fb2c5" />
+          </View>
+          <View style={styles.controlTextWrapper}>
+            <Text style={styles.controlLabel}>AI Vision Shield</Text>
+            <Text style={styles.controlDesc}>Detect objects in live streams</Text>
+          </View>
+        </View>
+        <Switch
+          value={aiShieldActive}
+          onValueChange={(val) => {
+            triggerHaptic('light');
+            setAiShieldActive(val);
+          }}
+          trackColor={{ false: '#cbd5e1', true: '#1fb2c5' }}
+          thumbColor="#ffffff"
+        />
+      </View>
+
+      <View style={styles.dividerHorizontal} />
+
+      <View style={styles.controlRow}>
+        <View style={styles.controlInfo}>
+          <View style={styles.iconCircleCrimson}>
+            <BellRing size={18} color={muteNotifications ? '#94a3b8' : '#ef4444'} />
+          </View>
+          <View style={styles.controlTextWrapper}>
+            <Text style={styles.controlLabel}>Mute Notifications</Text>
+            <Text style={styles.controlDesc}>Silence real-time UI alerts</Text>
+          </View>
+        </View>
+        <Switch
+          value={muteNotifications}
+          onValueChange={(val) => {
+            triggerHaptic('light');
+            setMuteNotifications(val);
+          }}
+          trackColor={{ false: '#cbd5e1', true: '#1fb2c5' }}
+          thumbColor="#ffffff"
+        />
+      </View>
+
+      <View style={styles.dividerHorizontal} />
+
+      <View style={styles.diagnosticWrapper}>
+        <TouchableOpacity
+          style={[styles.diagnosticButton, diagnosticRunning && styles.diagnosticButtonDisabled]}
+          onPress={runDiagnostic}
+          disabled={diagnosticRunning}
+        >
+          {diagnosticRunning ? (
+            <ActivityIndicator size="small" color="#ffffff" style={{ marginRight: 8 }} />
+          ) : (
+            <RefreshCw size={14} color="#ffffff" style={{ marginRight: 8 }} />
+          )}
+          <Text style={styles.diagnosticButtonText}>
+            {diagnosticRunning ? 'Scanning Feeds...' : 'Run Diagnostics'}
+          </Text>
+        </TouchableOpacity>
+
+        {systemLogs.length > 0 && (
+          <View style={styles.logsConsole}>
+            <Text style={styles.consoleTitle}>Console Logs:</Text>
+            {systemLogs.slice(-2).map((log, i) => (
+              <Text key={i} style={styles.consoleLogLine}>
+                &gt; {log}
+              </Text>
+            ))}
+          </View>
+        )}
+      </View>
+    </View>
+  );
+
+  const renderOverviewStats = () => (
+    <View style={styles.overviewGrid}>
+      <View style={[styles.statCard, styles.statCardOnline]}>
+        <View style={styles.statIconCircle}>
+          <ShieldCheck size={18} color="#10b981" />
+        </View>
+        <View>
+          <Text style={styles.statNumber}>{cameras.filter(c => c.status === 'online').length}</Text>
+          <Text style={styles.statLabel}>Online Cameras</Text>
+        </View>
+      </View>
+
+      <View style={[styles.statCard, styles.statCardOffline]}>
+        <View style={styles.statIconCircle}>
+          <ShieldAlert size={18} color="#ef4444" />
+        </View>
+        <View>
+          <Text style={styles.statNumber}>{cameras.filter(c => c.status !== 'online').length}</Text>
+          <Text style={styles.statLabel}>Offline Feeds</Text>
+        </View>
+      </View>
+    </View>
+  );
+
+  const renderConnectedChannels = () => {
+    if (loading) {
+      return (
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="small" color="#1fb2c5" />
+          <Text style={styles.loadingText}>Fetching system feeds...</Text>
+        </View>
+      );
+    }
+    
+    if (cameras.length === 0) {
+      return (
+        <View style={styles.emptyCamerasCard}>
+          <Video size={36} color="#94a3b8" strokeWidth={1.5} />
+          <Text style={styles.emptyTitle}>No Cameras Connected</Text>
+          <Text style={styles.emptySub}>Connect a local webcam or network camera to start monitoring.</Text>
+          <TouchableOpacity
+            style={styles.addCameraButton}
+            onPress={() => router.replace('/(tabs)/camaras/Camaras')}
+          >
+            <Text style={styles.addCameraText}>Add Camera</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (isWebLayout) {
+      // Grid display on web - bigger cards
+      return (
+        <View style={styles.cameraGridWeb}>
+          {cameras.map((camera) => {
+            const isOnline = camera.status === 'online';
+            const feedUri = `${BASE_URL}/cameras/${camera.id}/feed?t=${Date.now()}`;
+            return (
+              <View key={camera.id} style={styles.cameraCardWeb}>
+                <View style={styles.feedWrapper}>
+                  <MjpegFeed uri={feedUri} style={styles.feedImage} resizeMode="cover" />
+                  <View style={[styles.statusBadge, isOnline ? styles.badgeOnline : styles.badgeOffline]}>
+                    <View style={[styles.pulseDot, isOnline ? styles.dotOnline : styles.dotOffline]} />
+                    <Text style={styles.statusText}>{isOnline ? 'LIVE' : 'OFFLINE'}</Text>
+                  </View>
+                </View>
+                <View style={styles.cardInfo}>
+                  <Text numberOfLines={1} style={styles.cameraName}>{camera.name}</Text>
+                  <View style={styles.locationRow}>
+                    <MapPin size={11} color="#64748b" />
+                    <Text numberOfLines={1} style={styles.cameraLocation}>{camera.location || 'Local Host'}</Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      );
+    }
+
+    // Horizontal Scroll on mobile - bigger cards
+    return (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cameraScroll}>
+        {cameras.map((camera) => {
+          const isOnline = camera.status === 'online';
+          const feedUri = `${BASE_URL}/cameras/${camera.id}/feed?t=${Date.now()}`;
+          return (
+            <View key={camera.id} style={styles.cameraCard}>
+              <View style={styles.feedWrapper}>
+                <MjpegFeed uri={feedUri} style={styles.feedImage} resizeMode="cover" />
+                <View style={[styles.statusBadge, isOnline ? styles.badgeOnline : styles.badgeOffline]}>
+                  <View style={[styles.pulseDot, isOnline ? styles.dotOnline : styles.dotOffline]} />
+                  <Text style={styles.statusText}>{isOnline ? 'LIVE' : 'OFFLINE'}</Text>
+                </View>
+              </View>
+              <View style={styles.cardInfo}>
+                <Text numberOfLines={1} style={styles.cameraName}>{camera.name}</Text>
+                <View style={styles.locationRow}>
+                  <MapPin size={11} color="#64748b" />
+                  <Text numberOfLines={1} style={styles.cameraLocation}>{camera.location || 'Local Host'}</Text>
+                </View>
+              </View>
+            </View>
+          );
+        })}
+      </ScrollView>
+    );
+  };
+
+  const renderDetectionLog = () => {
+    if (isAlertsLoading) {
+      return (
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="small" color="#1fb2c5" />
+          <Text style={styles.loadingText}>Fetching detections...</Text>
+        </View>
+      );
+    }
+
+    if (alerts.length === 0) {
+      return (
+        <View style={styles.emptyCard}>
+          <ShieldCheck size={28} color="#10b981" style={{ marginBottom: 6 }} />
+          <Text style={styles.emptyText}>No recent security threats detected.</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.alertsContainer}>
+        {alerts.map((alert) => {
+          const isHigh = alert.detection_type === 'Intruder' || alert.detection_type === 'Unknown Face';
+          return (
+            <TouchableOpacity 
+              key={alert.id} 
+              style={[styles.alertLogCard, isHigh ? styles.alertLogHigh : styles.alertLogMedium]}
+              onPress={() => router.replace('/(tabs)/alerts')}
+            >
+              <View style={styles.alertIconWrapper}>
+                <AlertTriangle size={16} color={isHigh ? '#ef4444' : '#f59e0b'} />
+              </View>
+              <View style={styles.alertMainContent}>
+                <View style={styles.alertMetaHeader}>
+                  <Text style={styles.alertCameraText}>Channel: {alert.camera_id}</Text>
+                  <View style={styles.timeWrapper}>
+                    <Clock size={10} color="#64748b" style={{ marginRight: 4 }} />
+                    <Text style={styles.alertTimeText}>{formatTime(alert.created_at)}</Text>
+                  </View>
+                </View>
+                <Text style={styles.alertTitle}>{(alert.detection_type || 'Object')} Detected</Text>
+                <Text style={styles.alertSubtitle}>
+                  Confidence: {alert.confidence ? `${(alert.confidence * 100).toFixed(1)}%` : 'N/A'} • Status: {alert.status.toUpperCase()}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
-        {/* Dynamic Premium Header */}
-        <View style={styles.header}>
-          <View style={styles.headerTitleRow}>
-            <View>
-              <Text style={styles.brandName}>VISIONGUARD</Text>
-              <Text style={styles.greeting}>Command Center 👋</Text>
+      {renderHeader()}
+      
+      {isWebLayout ? (
+        // Web responsive 2-column layout
+        <View style={styles.webContainer}>
+          {/* Left panel: clock, status, operations, diagnostics, threat assessment */}
+          <ScrollView style={styles.leftColumn} showsVerticalScrollIndicator={false}>
+            <View style={styles.webSection}>
+              {renderStatusBanner()}
             </View>
-            <View style={styles.systemPulseBadge}>
-              <View style={[styles.pulseOuterDot, aiShieldActive ? styles.pulseActiveColor : styles.pulseInactiveColor]}>
-                <View style={[styles.pulseInnerDot, aiShieldActive ? styles.dotActiveColor : styles.dotInactiveColor]} />
-              </View>
-              <Text style={styles.systemPulseText}>
-                {aiShieldActive ? 'SHIELD ONLINE' : 'SHIELD MUTED'}
-              </Text>
+            <View style={styles.webSection}>
+              {renderLeftPanelExtra()}
             </View>
-          </View>
-
-          {/* Time & Live Status Banner */}
-          <View style={styles.liveBannerCard}>
-            <View style={styles.liveClockSection}>
-              <Text style={styles.bannerClockText}>{currentTime || '--:--:--'}</Text>
-              <Text style={styles.bannerDateText}>{currentDate || 'Loading date...'}</Text>
+            <View style={styles.webSection}>
+              <Text style={styles.sectionTitle}>Operations Control</Text>
+              {renderOperationsControl()}
             </View>
-            <View style={styles.dividerVertical} />
-            <View style={styles.bannerStatusSection}>
-              <View style={styles.bannerRow}>
-                <Cpu size={16} color="#1fb2c5" />
-                <Text style={styles.bannerInfoTitle}>AI Inference</Text>
-              </View>
-              <Text style={styles.bannerInfoValue}>
-                {aiShieldActive ? 'YOLOv8 Active (12ms)' : 'Paused'}
-              </Text>
+          </ScrollView>
+          
+          {/* Right panel: statistics overview, camera feeds grid, recent alerts */}
+          <ScrollView style={styles.rightColumn} showsVerticalScrollIndicator={false}>
+            <View style={styles.webSection}>
+              <Text style={styles.sectionTitle}>System Overview</Text>
+              {renderOverviewStats()}
             </View>
-          </View>
-        </View>
-
-        {/* Quick Operations Panel */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Panel</Text>
-          <View style={styles.controlsCard}>
-            <View style={styles.controlRow}>
-              <View style={styles.controlInfo}>
-                <Sparkles size={20} color="#1fb2c5" />
-                <View style={styles.controlTextWrapper}>
-                  <Text style={styles.controlLabel}>AI Vision Shield</Text>
-                  <Text style={styles.controlDesc}>Detect objects in live streams</Text>
-                </View>
-              </View>
-              <Switch
-                value={aiShieldActive}
-                onValueChange={(val) => {
-                  triggerHaptic('light');
-                  setAiShieldActive(val);
-                }}
-                trackColor={{ false: '#e2e8f0', true: '#1fb2c5' }}
-                thumbColor={Platform.OS === 'android' ? '#ffffff' : undefined}
-              />
-            </View>
-
-            <View style={styles.dividerHorizontal} />
-
-            <View style={styles.controlRow}>
-              <View style={styles.controlInfo}>
-                <BellRing size={20} color={muteNotifications ? '#94a3b8' : '#e11d48'} />
-                <View style={styles.controlTextWrapper}>
-                  <Text style={styles.controlLabel}>Mute Notifications</Text>
-                  <Text style={styles.controlDesc}>Silence real-time UI alerts</Text>
-                </View>
-              </View>
-              <Switch
-                value={muteNotifications}
-                onValueChange={(val) => {
-                  triggerHaptic('light');
-                  setMuteNotifications(val);
-                }}
-                trackColor={{ false: '#e2e8f0', true: '#1fb2c5' }}
-                thumbColor={Platform.OS === 'android' ? '#ffffff' : undefined}
-              />
-            </View>
-
-            <View style={styles.dividerHorizontal} />
-
-            {/* Diagnostic trigger button */}
-            <View style={styles.diagnosticWrapper}>
-              <TouchableOpacity
-                style={[styles.diagnosticButton, diagnosticRunning && styles.diagnosticButtonDisabled]}
-                onPress={runDiagnostic}
-                disabled={diagnosticRunning}
-              >
-                {diagnosticRunning ? (
-                  <ActivityIndicator size="small" color="#ffffff" style={{ marginRight: 8 }} />
-                ) : (
-                  <RefreshCw size={16} color="#ffffff" style={{ marginRight: 8 }} />
-                )}
-                <Text style={styles.diagnosticButtonText}>
-                  {diagnosticRunning ? 'Scanning Feeds...' : 'Run Diagnostics'}
-                </Text>
-              </TouchableOpacity>
-
-              {systemLogs.length > 0 && (
-                <View style={styles.logsConsole}>
-                  <Text style={styles.consoleTitle}>Diagnostic Console Logs:</Text>
-                  {systemLogs.slice(-2).map((log, i) => (
-                    <Text key={i} style={styles.consoleLogLine}>
-                      &gt; {log}
-                    </Text>
-                  ))}
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-
-        {/* Overview Stats Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Overview</Text>
-          <View style={styles.overviewGrid}>
-            <View style={[styles.statCard, { borderLeftColor: '#10b981', borderLeftWidth: 4 }]}>
-              <View style={styles.statIconCircle}>
-                <ShieldCheck size={20} color="#10b981" />
-              </View>
-              <Text style={styles.statNumber}>{cameras.filter(c => c.status === 'online').length}</Text>
-              <Text style={styles.statLabel}>Online Cameras</Text>
-            </View>
-
-            <View style={[styles.statCard, { borderLeftColor: '#ef4444', borderLeftWidth: 4 }]}>
-              <View style={styles.statIconCircle}>
-                <ShieldAlert size={20} color="#ef4444" />
-              </View>
-              <Text style={styles.statNumber}>{cameras.filter(c => c.status !== 'online').length}</Text>
-              <Text style={styles.statLabel}>Offline Feeds</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Camera Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Connected Channels</Text>
-            <TouchableOpacity onPress={() => router.replace('/(tabs)/camaras/Camaras')}>
-              <Text style={styles.viewAllText}>Manage</Text>
-            </TouchableOpacity>
-          </View>
-
-          {loading ? (
-            <View style={styles.loaderContainer}>
-              <ActivityIndicator size="small" color="#1fb2c5" />
-              <Text style={styles.loadingText}>Fetching system feeds...</Text>
-            </View>
-          ) : cameras.length === 0 ? (
-            <View style={styles.emptyCamerasCard}>
-              <Video size={36} color="#94a3b8" strokeWidth={1.5} />
-              <Text style={styles.emptyTitle}>No Cameras Connected</Text>
-              <Text style={styles.emptySub}>Connect a local webcam or network camera to start monitoring.</Text>
-              <TouchableOpacity
-                style={styles.addCameraButton}
-                onPress={() => router.replace('/(tabs)/camaras/Camaras')}
-              >
-                <Text style={styles.addCameraText}>Add Camera</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.cameraScroll}
-            >
-              {cameras.map((camera) => {
-                const isOnline = camera.status === 'online';
-                const feedUri = `${BASE_URL}/cameras/${camera.id}/feed?t=${Date.now()}`;
-
-                return (
-                  <View key={camera.id} style={styles.cameraCard}>
-                    <View style={styles.feedWrapper}>
-                      <MjpegFeed
-                        uri={feedUri}
-                        style={styles.feedImage}
-                        resizeMode="cover"
-                      />
-                      <View style={[
-                        styles.statusBadge,
-                        isOnline ? styles.badgeOnline : styles.badgeOffline
-                      ]}>
-                        <View style={[styles.pulseDot, isOnline ? styles.dotOnline : styles.dotOffline]} />
-                        <Text style={styles.statusText}>{isOnline ? 'LIVE' : 'OFFLINE'}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.cardInfo}>
-                      <Text numberOfLines={1} style={styles.cameraName}>
-                        {camera.name}
-                      </Text>
-                      <View style={styles.locationRow}>
-                        <MapPin size={12} color="#94a3b8" />
-                        <Text numberOfLines={1} style={styles.cameraLocation}>
-                          {camera.location || 'Local Host'}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                );
-              })}
-            </ScrollView>
-          )}
-        </View>
-
-        {/* Dynamic Recent Detections Section */}
-        <View style={[styles.section, { marginBottom: 20 }]}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Detection Log</Text>
-            <View style={styles.logActionButtons}>
-              <TouchableOpacity style={styles.simulateButton} onPress={simulateThreat}>
-                <Activity size={12} color="#1fb2c5" style={{ marginRight: 4 }} />
-                <Text style={styles.simulateButtonText}>Simulate Threat</Text>
-              </TouchableOpacity>
-              {alerts.length > 0 && (
-                <TouchableOpacity onPress={clearAlerts} style={styles.clearAlertButton}>
-                  <Text style={styles.clearAlertButtonText}>Clear</Text>
+            
+            <View style={styles.webSection}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Connected Channels</Text>
+                <TouchableOpacity onPress={() => router.replace('/(tabs)/camaras/Camaras')} style={styles.manageLink}>
+                  <Text style={styles.viewAllText}>Manage</Text>
+                  <ExternalLink size={12} color="#1fb2c5" />
                 </TouchableOpacity>
-              )}
+              </View>
+              {renderConnectedChannels()}
             </View>
+            
+            <View style={[styles.webSection, { marginBottom: 120 }]}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Recent Detection Log</Text>
+                <View style={styles.logActionButtons}>
+                  <TouchableOpacity style={styles.simulateButton} onPress={simulateThreat}>
+                    <Activity size={10} color="#1fb2c5" style={{ marginRight: 4 }} />
+                    <Text style={styles.simulateButtonText}>Simulate</Text>
+                  </TouchableOpacity>
+                  {alerts.length > 0 && (
+                    <TouchableOpacity onPress={clearAlerts} style={styles.clearAlertButton}>
+                      <Text style={styles.clearAlertButtonText}>Clear</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+              {renderDetectionLog()}
+            </View>
+          </ScrollView>
+        </View>
+      ) : (
+        // Mobile single-column layout
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.mobileSection}>
+            {renderStatusBanner()}
+          </View>
+          
+          <View style={styles.mobileSection}>
+            <Text style={styles.sectionTitle}>Operations Control</Text>
+            {renderOperationsControl()}
           </View>
 
-          {alerts.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <ShieldCheck size={28} color="#94a3b8" style={{ marginBottom: 6 }} />
-              <Text style={styles.emptyText}>No recent security threats detected.</Text>
+          <View style={styles.mobileSection}>
+            <Text style={styles.sectionTitle}>Overview</Text>
+            {renderOverviewStats()}
+          </View>
+
+          <View style={styles.mobileSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Connected Channels</Text>
+              <TouchableOpacity onPress={() => router.replace('/(tabs)/camaras/Camaras')} style={styles.manageLink}>
+                <Text style={styles.viewAllText}>Manage</Text>
+                <ExternalLink size={12} color="#1fb2c5" />
+              </TouchableOpacity>
             </View>
-          ) : (
-            <View style={styles.alertsContainer}>
-              {alerts.map((alert) => (
-                <View 
-                  key={alert.id} 
-                  style={[
-                    styles.alertLogCard, 
-                    alert.severity === 'high' ? styles.alertLogHigh : styles.alertLogMedium
-                  ]}
-                >
-                  <View style={styles.alertIconWrapper}>
-                    <AlertTriangle 
-                      size={18} 
-                      color={alert.severity === 'high' ? '#ef4444' : '#d97706'} 
-                    />
-                  </View>
-                  <View style={styles.alertMainContent}>
-                    <View style={styles.alertMetaHeader}>
-                      <Text style={styles.alertCameraText}>{alert.cameraName}</Text>
-                      <Text style={styles.alertTimeText}>{alert.time}</Text>
-                    </View>
-                    <Text style={styles.alertTitle}>
-                      {alert.detectedObject} Detection Warning
-                    </Text>
-                    <Text style={styles.alertSubtitle}>
-                      Confidence Score: {alert.confidence}% • Severity: {alert.severity.toUpperCase()}
-                    </Text>
-                  </View>
-                </View>
-              ))}
+            {renderConnectedChannels()}
+          </View>
+
+          <View style={[styles.mobileSection, { marginBottom: 20 }]}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Detection Log</Text>
+              <View style={styles.logActionButtons}>
+                <TouchableOpacity style={styles.simulateButton} onPress={simulateThreat}>
+                  <Activity size={10} color="#1fb2c5" style={{ marginRight: 4 }} />
+                  <Text style={styles.simulateButtonText}>Simulate</Text>
+                </TouchableOpacity>
+                {alerts.length > 0 && (
+                  <TouchableOpacity onPress={clearAlerts} style={styles.clearAlertButton}>
+                    <Text style={styles.clearAlertButtonText}>Clear</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
-          )}
-        </View>
-      </ScrollView>
+            {renderDetectionLog()}
+          </View>
+        </ScrollView>
+      )}
 
       <FloatingNavBar />
     </SafeAreaView>
@@ -450,33 +634,47 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc', // Light premium background
+    backgroundColor: '#f8fafc', // Pristine Light mode background tint
   },
   scrollContent: {
     paddingBottom: 120,
   },
+  webContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingHorizontal: 24,
+    gap: 24,
+  },
+  leftColumn: {
+    flex: 3.8,
+  },
+  rightColumn: {
+    flex: 6.2,
+  },
   header: {
     paddingHorizontal: 24,
-    paddingTop: 56,
-    paddingBottom: 15,
+    paddingTop: 40,
+    paddingBottom: 10,
   },
   headerTitleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
   },
-  brandName: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#1fb2c5',
-    letterSpacing: 2,
+  logoAndTextWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  greeting: {
-    fontSize: 24,
+  logoImage: {
+    width: 60,
+    height: 60,
+  },
+  brandTitleText: {
+    fontSize: 26,
     fontWeight: '800',
     color: '#0f172a',
-    marginTop: 2,
+    letterSpacing: -0.5,
   },
   systemPulseBadge: {
     flexDirection: 'row',
@@ -488,15 +686,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 3,
+    elevation: 1,
   },
   pulseOuterDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 6,
@@ -508,9 +706,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(148, 163, 184, 0.2)',
   },
   pulseInnerDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
   },
   dotActiveColor: {
     backgroundColor: '#10b981',
@@ -519,9 +717,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#94a3b8',
   },
   systemPulseText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
-    color: '#475569',
+    color: '#64748b',
     letterSpacing: 0.5,
   },
   liveBannerCard: {
@@ -534,22 +732,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
   },
   liveClockSection: {
     flex: 1,
   },
   bannerClockText: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: '#0f172a',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : undefined,
   },
   bannerDateText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748b',
     fontWeight: '500',
     marginTop: 2,
@@ -569,37 +767,104 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   bannerInfoTitle: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#64748b',
     fontWeight: '700',
     textTransform: 'uppercase',
   },
   bannerInfoValue: {
-    fontSize: 14,
-    color: '#334155',
+    fontSize: 13,
+    color: '#1fb2c5',
     fontWeight: '600',
     marginTop: 2,
   },
-  section: {
-    paddingHorizontal: 24,
-    marginTop: 16,
+  threatCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
   },
-  sectionHeader: {
+  threatHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    gap: 8,
   },
-  sectionTitle: {
+  threatTitle: {
     fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  secureBadge: {
+    backgroundColor: '#d1fae5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginLeft: 'auto',
+  },
+  secureBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#065f46',
+  },
+  threatDesc: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 10,
+    lineHeight: 18,
+  },
+  checklistTitle: {
+    fontSize: 11,
     fontWeight: '800',
     color: '#64748b',
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 8,
   },
+  checklistItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  checklistText: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  mobileSection: {
+    paddingHorizontal: 24,
+    marginTop: 16,
+  },
+  webSection: {
+    marginTop: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    marginBottom: 6,
+  },
+  manageLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   viewAllText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#1fb2c5',
     fontWeight: '700',
   },
@@ -610,16 +875,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
   },
   controlRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   controlInfo: {
     flexDirection: 'row',
@@ -627,16 +892,32 @@ const styles = StyleSheet.create({
     gap: 12,
     flex: 1,
   },
+  iconCircleTeal: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(31, 178, 197, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconCircleCrimson: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   controlTextWrapper: {
     flex: 1,
   },
   controlLabel: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     color: '#0f172a',
   },
   controlDesc: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748b',
     marginTop: 2,
   },
@@ -646,22 +927,27 @@ const styles = StyleSheet.create({
     marginVertical: 10,
   },
   diagnosticWrapper: {
-    marginTop: 10,
+    marginTop: 6,
   },
   diagnosticButton: {
     backgroundColor: '#1fb2c5',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    shadowColor: '#1fb2c5',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
   diagnosticButtonDisabled: {
-    backgroundColor: 'rgba(31, 178, 197, 0.5)',
+    backgroundColor: 'rgba(31, 178, 197, 0.4)',
   },
   diagnosticButtonText: {
     color: '#ffffff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
   },
   logsConsole: {
@@ -673,13 +959,13 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
   },
   consoleTitle: {
-    fontSize: 10,
+    fontSize: 9,
     color: '#1fb2c5',
     fontWeight: '700',
     marginBottom: 4,
   },
   consoleLogLine: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#059669',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : undefined,
     marginTop: 2,
@@ -690,16 +976,27 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    gap: 12,
     shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  statCardOnline: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#10b981',
+  },
+  statCardOffline: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#ef4444',
   },
   statIconCircle: {
     width: 32,
@@ -708,31 +1005,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
   },
   statNumber: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
     color: '#0f172a',
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748b',
     fontWeight: '600',
-    marginTop: 2,
+    marginTop: 1,
   },
   loaderContainer: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    padding: 40,
+    padding: 30,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowOpacity: 0.02,
   },
   loadingText: {
-    marginTop: 10,
-    fontSize: 13,
+    marginTop: 8,
+    fontSize: 12,
     color: '#64748b',
     fontWeight: '500',
   },
@@ -744,51 +1041,75 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
   },
   emptyTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     color: '#0f172a',
     marginTop: 10,
   },
   emptySub: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748b',
     textAlign: 'center',
     marginTop: 4,
-    marginBottom: 14,
-    paddingHorizontal: 20,
+    marginBottom: 12,
+    paddingHorizontal: 16,
   },
   addCameraButton: {
     backgroundColor: '#1fb2c5',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
   },
   addCameraText: {
     color: '#ffffff',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   cameraScroll: {
     paddingRight: 24,
     gap: 16,
   },
+  cameraGridWeb: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
   cameraCard: {
-    width: 220,
+    width: 280, // Bigger camera width
     backgroundColor: '#ffffff',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     overflow: 'hidden',
     shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  cameraCardWeb: {
+    width: '48%', // Spacious camera width
+    minWidth: 260,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
   },
   feedWrapper: {
-    height: 130,
+    height: 180, // Bigger camera height
     backgroundColor: '#f1f5f9',
     position: 'relative',
   },
@@ -802,9 +1123,9 @@ const styles = StyleSheet.create({
     left: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: 4,
     gap: 4,
   },
   badgeOnline: {
@@ -814,21 +1135,21 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(239, 68, 68, 0.9)',
   },
   pulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: '#ffffff',
   },
   dotOnline: {
     shadowColor: '#ffffff',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
-    shadowRadius: 4,
+    shadowRadius: 3,
   },
   dotOffline: {},
   statusText: {
     color: '#ffffff',
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
@@ -836,7 +1157,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   cameraName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: '#0f172a',
   },
@@ -848,7 +1169,7 @@ const styles = StyleSheet.create({
   },
   cameraLocation: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: '#64748b',
     fontWeight: '500',
   },
   logActionButtons: {
@@ -861,13 +1182,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(31, 178, 197, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(31, 178, 197, 0.25)',
+    borderColor: 'rgba(31, 178, 197, 0.2)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
   simulateButtonText: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#1fb2c5',
     fontWeight: '700',
   },
@@ -876,7 +1197,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   clearAlertButtonText: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#ef4444',
     fontWeight: '600',
   },
@@ -885,12 +1206,17 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    padding: 30,
+    padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
   },
   emptyText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#64748b',
     fontWeight: '500',
   },
@@ -905,12 +1231,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     shadowColor: '#0f172a',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
+    shadowOpacity: 0.02,
     shadowRadius: 4,
     elevation: 1,
   },
   alertLogHigh: {
-    backgroundColor: '#fef2f2',
+    backgroundColor: '#fff5f5',
     borderColor: '#fee2e2',
     borderLeftWidth: 4,
     borderLeftColor: '#ef4444',
@@ -919,21 +1245,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#fffbeb',
     borderColor: '#fef3c7',
     borderLeftWidth: 4,
-    borderLeftColor: '#d97706',
+    borderLeftColor: '#f59e0b',
   },
   alertIconWrapper: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#ffffff',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#f8fafc',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
   },
   alertMainContent: {
     flex: 1,
@@ -948,20 +1269,26 @@ const styles = StyleSheet.create({
     color: '#475569',
     fontWeight: '700',
   },
+  timeWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   alertTimeText: {
-    fontSize: 11,
-    color: '#94a3b8',
+    fontSize: 10,
+    color: '#64748b',
     fontWeight: '500',
   },
   alertTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: '#0f172a',
     marginTop: 2,
   },
   alertSubtitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748b',
     marginTop: 1,
   },
 });
+
+
