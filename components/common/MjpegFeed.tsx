@@ -90,8 +90,12 @@ function WebSocketImage({
 
       ws.onmessage = (event) => {
         if (active && event.data) {
-          // Double-buffering: set the next frame to load
-          setNextFrame(`data:image/jpeg;base64,${event.data}`);
+          const frameData = `data:image/jpeg;base64,${event.data}`;
+          if (Platform.OS === 'web') {
+            setCurrentFrame(frameData);
+          } else {
+            setNextFrame(frameData);
+          }
         }
       };
 
@@ -126,6 +130,27 @@ function WebSocketImage({
   };
 
   const flattenedStyle = StyleSheet.flatten(style) || {};
+
+  if (Platform.OS === 'web') {
+    return (
+      <div style={Object.assign(
+        { width: '100%', height: '100%', position: 'relative', backgroundColor: '#000', overflow: 'hidden' },
+        flattenedStyle
+      )}>
+        {currentFrame && (
+          <img
+            src={currentFrame}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: resizeMode,
+              display: 'block'
+            }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <View style={[flattenedStyle, { backgroundColor: '#000', overflow: 'hidden' }]}>
