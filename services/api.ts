@@ -3,17 +3,29 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-const DEV_MACHINE_IP = '192.168.8.128';
+const FALLBACK_DEV_IP = '192.168.0.196';
 
-const API_BASE_URL =
-  Platform.OS === 'web'
-    ? 'http://127.0.0.1:8000'
-    : `http://${DEV_MACHINE_IP}:8000`;
+function getBaseUrl(): string {
+  if (Platform.OS === 'web') {
+    return 'http://127.0.0.1:8000';
+  }
+
+  const debuggerHost = Constants.expoConfig?.hostUri
+    ?? Constants.manifest2?.extra?.expoGo?.debuggerHost
+    ?? Constants.manifest?.debuggerHost;
+
+  const devIp = debuggerHost?.split(':')[0] || FALLBACK_DEV_IP;
+  return `http://${devIp}:8000`;
+}
+
+const API_BASE_URL = getBaseUrl();
+console.log('[VisionGuard] API base URL:', API_BASE_URL);
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 50000000000000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },

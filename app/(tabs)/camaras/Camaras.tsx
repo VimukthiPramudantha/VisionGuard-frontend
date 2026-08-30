@@ -12,7 +12,7 @@ import {
   Modal,
   TextInput,
 } from 'react-native';
-import { Plus, Video, Radio, Shield, MapPin, RefreshCw, Maximize2, PenTool, Trash2, Save, AlertTriangle } from 'lucide-react-native';
+import { Plus, Video, Radio, Shield, MapPin, RefreshCw, Maximize2, PenTool, Trash2, Save, AlertTriangle, X } from 'lucide-react-native';
 import { api } from '../../../services/api';
 import FloatingNavBar from '../../../components/common/FloatingNavBar';
 import LoadingAnimation from '../../../components/common/LoadingAnimation';
@@ -297,6 +297,38 @@ export default function CamarasScreen() {
     }
   };
 
+  const handleRemoveCamera = (cam: Camera) => {
+    const performDelete = async () => {
+      try {
+        await api.delete(`/cameras/${cam.id}`);
+        alertOrToast('Success', `${cam.name} has been removed`, 'success');
+        // Reset active index if needed
+        if (activeCameraIndex >= cameras.length - 1) {
+          setActiveCameraIndex(Math.max(0, cameras.length - 2));
+        }
+        fetchCameras();
+      } catch (error: any) {
+        console.error(error);
+        const errorMsg = error.response?.data?.detail || 'Failed to remove camera';
+        alertOrToast('Error', errorMsg, 'error');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(`Remove "${cam.name}"? This action cannot be undone.`);
+      if (confirmed) performDelete();
+    } else {
+      Alert.alert(
+        'Remove Camera',
+        `Are you sure you want to remove "${cam.name}"? This action cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Remove', style: 'destructive', onPress: performDelete },
+        ],
+      );
+    }
+  };
+
   const renderCamera = ({ item }: { item: Camera }) => {
     const isOnline = item.status === 'online';
     const isFullView = selectedCameraForFullView?.id === item.id;
@@ -489,22 +521,30 @@ export default function CamarasScreen() {
                       const isActive = idx === activeCameraIndex;
                       const isCamOnline = cam.status === 'online';
                       return (
-                        <TouchableOpacity
-                          key={cam.id}
-                          style={[
-                            styles.selectorButton,
-                            isActive && styles.selectorButtonActive,
-                          ]}
-                          onPress={() => setActiveCameraIndex(idx)}
-                        >
-                          <View style={[styles.selectorStatusDot, isCamOnline ? styles.dotOnline : styles.dotOffline]} />
-                          <Text style={[
-                            styles.selectorButtonText,
-                            isActive && styles.selectorButtonTextActive,
-                          ]}>
-                            {cam.name}
-                          </Text>
-                        </TouchableOpacity>
+                        <View key={cam.id} style={styles.selectorButtonWrapper}>
+                          <TouchableOpacity
+                            style={[
+                              styles.selectorButton,
+                              isActive && styles.selectorButtonActive,
+                            ]}
+                            onPress={() => setActiveCameraIndex(idx)}
+                          >
+                            <View style={[styles.selectorStatusDot, isCamOnline ? styles.dotOnline : styles.dotOffline]} />
+                            <Text style={[
+                              styles.selectorButtonText,
+                              isActive && styles.selectorButtonTextActive,
+                            ]}>
+                              {cam.name}
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.removeCameraButton}
+                            onPress={() => handleRemoveCamera(cam)}
+                            activeOpacity={0.7}
+                          >
+                            <Trash2 size={12} color="#ef4444" />
+                          </TouchableOpacity>
+                        </View>
                       );
                     })}
                   </View>
@@ -1257,6 +1297,20 @@ const styles = StyleSheet.create({
   },
   selectorButtonTextActive: {
     color: '#ffffff',
+  },
+  selectorButtonWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  removeCameraButton: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+    borderRadius: 8,
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   zoneButton: {

@@ -1,8 +1,9 @@
-// components/common/FloatingNavBar.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { Home, Camera, Bell, User, Users } from 'lucide-react-native';
 import { useRouter, usePathname } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api } from '../../services/api';
 
 const navItems = [
   { name: 'Dashboard', icon: Home, route: '/(tabs)/dashboard', match: 'dashboard' },
@@ -18,6 +19,28 @@ export default function FloatingNavBar() {
   const router = useRouter();
   const pathname = usePathname();
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const userStr = await AsyncStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        if (user && user.id) {
+          const response = await api.get(`/alerts/unread-count?user_id=${user.id}`);
+          setUnreadCount(response.data.unread_count || 0);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch unread count:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 15000);
+    return () => clearInterval(interval);
+  }, [pathname]);
 
   return (
     <View style={styles.wrapper}>
@@ -26,6 +49,7 @@ export default function FloatingNavBar() {
           const isActive = pathname === item.route || pathname.includes(item.match);
           const isHovered = hoveredIndex === index;
           const showLabel = isActive || isHovered;
+          const isAlertsTab = item.match === 'alerts';
 
           return (
             <Pressable
@@ -42,11 +66,20 @@ export default function FloatingNavBar() {
               // @ts-ignore
               onMouseLeave={() => setHoveredIndex(null)}
             >
-              <item.icon 
-                size={20} 
-                color={isActive ? '#FFFFFF' : '#07060683'}
-                strokeWidth={2.2}
-              />
+              <View style={styles.iconContainer}>
+                <item.icon 
+                  size={20} 
+                  color={isActive ? '#FFFFFF' : '#07060683'}
+                  strokeWidth={2.2}
+                />
+                {isAlertsTab && unreadCount > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
               <View style={[
                 styles.labelContainer,
                 showLabel ? styles.labelContainerVisible : styles.labelContainerHidden
@@ -181,5 +214,30 @@ const styles = StyleSheet.create({
   },
   hoveredLabel: {
     color: '#000000a2',
-  }
+  },
+  iconContainer: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    backgroundColor: '#ef4444',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1,
+    borderColor: '#ffffff',
+  },
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
 });

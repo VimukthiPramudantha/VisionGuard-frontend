@@ -63,7 +63,7 @@ export default function LoginScreen() {
       const response = await api.post('/auth/login', { email, password });
       console.log('Login successful:', response.data);
       
-      await AsyncStorage.setItem('authToken', response.data.user?.id || 'dummy-token');
+      await AsyncStorage.setItem('authToken', response.data.access_token || 'dummy-token');
       await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
 
       triggerToast('success', 'Success', 'Welcome back!');
@@ -86,7 +86,6 @@ export default function LoginScreen() {
 
   const renderLeftPanel = () => (
     <View style={styles.leftPanel}>
-      {/* Decorative Glow Blobs */}
       <View style={[styles.glowBlob, styles.blob1]} />
       <View style={[styles.glowBlob, styles.blob2]} />
 
@@ -203,7 +202,6 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
       style={styles.container}
     >
-      {/* Background Decorative Glows for the Form Area */}
       <View pointerEvents="none" style={[styles.ambientGlow, styles.ambient1]} />
       <View pointerEvents="none" style={[styles.ambientGlow, styles.ambient2]} />
 
