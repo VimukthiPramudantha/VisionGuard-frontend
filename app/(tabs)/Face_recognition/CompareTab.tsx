@@ -157,7 +157,7 @@ export default function CompareTab() {
       {result && (
         <View style={[styles.resultCard, result.match ? styles.matchCard : styles.noMatchCard]}>
           <Text style={styles.resultTitle}>
-            {result.match ? "✅ Match Found" : "❌ No Match"}
+            {result.match ? "Match Found" : "No Match"}
           </Text>
           <Text style={styles.similarityText}>
             Similarity: <Text style={styles.similarityValue}>{result.similarity}%</Text>

@@ -1,5 +1,5 @@
 // app/(tabs)/Settings/settings.tsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Switch,
   Alert,
   Platform,
+  Modal,
+  TextInput,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -37,6 +39,16 @@ import {
 } from 'lucide-react-native';
 import FloatingNavBar from '../../../components/common/FloatingNavBar';
 import { useRouter } from 'expo-router';
+import { api } from '../../../services/api';
+import { getUser, setUser } from '../../../utils/storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+let goeyToast: any = null;
+try {
+  goeyToast = require('goey-toast').goeyToast;
+} catch (e) {
+  console.warn('goey-toast failed to load in settings page', e);
+}
 
 const PRIMARY = '#1fb2c5';
 const DARK = '#0f172a';
@@ -111,6 +123,46 @@ export default function SettingsScreen() {
   const [alertSensitivity, setAlertSensitivity] = useState<'Low' | 'Medium' | 'High'>('Medium');
   const [detectionConfidence, setDetectionConfidence] = useState(45);
 
+  const [user, setUserData] = useState<any>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  const fetchUserDataAndSettings = async () => {
+    try {
+      const cachedUser = await getUser();
+      if (cachedUser) {
+        setUserData(cachedUser);
+        setNewName(cachedUser.full_name || '');
+      }
+
+      if (cachedUser?.email) {
+        const userRes = await api.get('/auth/me', { params: { email: cachedUser.email } });
+        if (userRes.data) {
+          setUserData(userRes.data);
+          setNewName(userRes.data.full_name || '');
+          await setUser(userRes.data);
+        }
+      }
+
+      const settingsRes = await api.get('/auth/settings');
+      if (settingsRes.data) {
+        const s = settingsRes.data;
+        setNotificationsEnabled(s.notifications_enabled);
+        setTwoFactorEnabled(s.two_factor_enabled);
+        setDetectionConfidence(Math.round(s.detection_confidence * 100));
+        setAutoSaveSnapshots(s.auto_save_snapshots);
+        setAlertSensitivity(s.alert_sensitivity);
+      }
+    } catch (err) {
+      console.error('Failed to fetch settings/user details:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchUserDataAndSettings();
+  }, []);
+
   const accountChevron = useSharedValue(0);
   const securityChevron = useSharedValue(0);
   const cameraChevron = useSharedValue(0);
@@ -136,22 +188,122 @@ export default function SettingsScreen() {
   };
 
   const handleEditProfile = () => {
-    Alert.alert('Edit Profile', 'Profile editing will be available soon.');
+    if (user) {
+      setNewName(user.full_name || '');
+      setIsEditModalOpen(true);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!newName.trim()) {
+      Alert.alert('Error', 'Name cannot be empty');
+      return;
+    }
+    setIsSavingProfile(true);
+    try {
+      const response = await api.put('/auth/me', null, {
+        params: {
+          email: user.email,
+          full_name: newName.trim(),
+        },
+      });
+      if (response.data) {
+        setUserData(response.data);
+        await setUser(response.data);
+        Alert.alert('Success', 'Profile updated successfully');
+        setIsEditModalOpen(false);
+      }
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to update profile');
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: () => console.log('Logged out') },
-    ]);
+    const performLogout = async () => {
+      try {
+        await AsyncStorage.removeItem('authToken');
+        await AsyncStorage.removeItem('user');
+
+        if (Platform.OS === 'web' && goeyToast) {
+          goeyToast.success('Logged Out', { description: 'You have been logged out successfully' });
+        } else {
+          Alert.alert('Success', 'You have been logged out successfully');
+        }
+
+        router.replace('/(auth)/login');
+      } catch (err) {
+        console.error('Failed to log out:', err);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const confirm = window.confirm('Are you sure you want to logout?');
+      if (confirm) {
+        performLogout();
+      }
+    } else {
+      Alert.alert('Logout', 'Are you sure you want to logout?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: performLogout,
+        },
+      ]);
+    }
   };
 
-  const cycleAlertSensitivity = () => {
-    setAlertSensitivity((prev) => {
-      if (prev === 'Low') return 'Medium';
-      if (prev === 'Medium') return 'High';
-      return 'Low';
-    });
+  const toggleNotifications = async (val: boolean) => {
+    setNotificationsEnabled(val);
+    try {
+      await api.put('/auth/settings', { notifications_enabled: val });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const toggleTwoFactor = async (val: boolean) => {
+    setTwoFactorEnabled(val);
+    try {
+      await api.put('/auth/settings', { two_factor_enabled: val });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const toggleAutoSave = async (val: boolean) => {
+    setAutoSaveSnapshots(val);
+    try {
+      await api.put('/auth/settings', { auto_save_snapshots: val });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleConfidenceChange = async (newVal: number) => {
+    setDetectionConfidence(newVal);
+    try {
+      await api.put('/auth/settings', { detection_confidence: newVal / 100 });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const cycleAlertSensitivity = async () => {
+    let next: 'Low' | 'Medium' | 'High' = 'Medium';
+    if (alertSensitivity === 'Low') next = 'Medium';
+    else if (alertSensitivity === 'Medium') next = 'High';
+    else next = 'Low';
+
+    setAlertSensitivity(next);
+    try {
+      await api.put('/auth/settings', { alert_sensitivity: next });
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const sensitivityColor: Record<string, string> = {
@@ -236,7 +388,7 @@ export default function SettingsScreen() {
       <View style={styles.stepperRow}>
         <TouchableOpacity
           style={styles.stepperBtn}
-          onPress={() => setDetectionConfidence((p) => Math.max(10, p - 5))}
+          onPress={() => handleConfidenceChange(Math.max(10, detectionConfidence - 5))}
         >
           <Text style={styles.stepperBtnText}>−</Text>
         </TouchableOpacity>
@@ -248,7 +400,7 @@ export default function SettingsScreen() {
         </View>
         <TouchableOpacity
           style={styles.stepperBtn}
-          onPress={() => setDetectionConfidence((p) => Math.min(100, p + 5))}
+          onPress={() => handleConfidenceChange(Math.min(100, detectionConfidence + 5))}
         >
           <Text style={styles.stepperBtnText}>+</Text>
         </TouchableOpacity>
@@ -276,15 +428,23 @@ export default function SettingsScreen() {
               </View>
             </TouchableOpacity>
 
-            <Text style={styles.userName}>John Doe</Text>
-            <Text style={styles.userEmail}>john.doe@email.com</Text>
+            <Text style={styles.userName}>{user?.full_name || 'Loading...'}</Text>
+            <Text style={styles.userEmail}>{user?.email || 'Loading...'}</Text>
 
             <View style={styles.roleBadge}>
               <Shield size={12} color={PRIMARY} strokeWidth={2.5} />
-              <Text style={styles.roleText}>Administrator</Text>
+              <Text style={styles.roleText}>{user?.role || 'User'}</Text>
             </View>
 
-            <Text style={styles.memberSince}>Member since March 15, 2025</Text>
+            <Text style={styles.memberSince}>
+              {user?.created_at
+                ? `Member since ${new Date(user.created_at).toLocaleDateString(undefined, {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })}`
+                : 'Loading...'}
+            </Text>
 
             <TouchableOpacity style={styles.editProfileBtn} onPress={handleEditProfile}>
               <Edit2 size={14} color="#fff" strokeWidth={2.2} />
@@ -312,7 +472,7 @@ export default function SettingsScreen() {
                   rightElement={
                     <Switch
                       value={notificationsEnabled}
-                      onValueChange={setNotificationsEnabled}
+                      onValueChange={toggleNotifications}
                       trackColor={{ false: '#cbd5e1', true: PRIMARY }}
                       thumbColor={notificationsEnabled ? '#fff' : '#f8fafc'}
                     />
@@ -352,7 +512,7 @@ export default function SettingsScreen() {
                   rightElement={
                     <Switch
                       value={twoFactorEnabled}
-                      onValueChange={setTwoFactorEnabled}
+                      onValueChange={toggleTwoFactor}
                       trackColor={{ false: '#cbd5e1', true: '#8b5cf6' }}
                       thumbColor={twoFactorEnabled ? '#fff' : '#f8fafc'}
                     />
@@ -408,7 +568,7 @@ export default function SettingsScreen() {
                   rightElement={
                     <Switch
                       value={autoSaveSnapshots}
-                      onValueChange={setAutoSaveSnapshots}
+                      onValueChange={toggleAutoSave}
                       trackColor={{ false: '#cbd5e1', true: '#f59e0b' }}
                       thumbColor={autoSaveSnapshots ? '#fff' : '#f8fafc'}
                     />
@@ -460,6 +620,46 @@ export default function SettingsScreen() {
           <Text style={styles.footerText}>VisionGuard • v1.0.0</Text>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={isEditModalOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsEditModalOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Profile</Text>
+            <Text style={styles.modalSub}>Update your display name</Text>
+            
+            <TextInput
+              style={styles.modalInput}
+              value={newName}
+              onChangeText={setNewName}
+              placeholder="Full Name"
+              placeholderTextColor={TEXT_MUTED}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnCancel]}
+                onPress={() => setIsEditModalOpen(false)}
+              >
+                <Text style={styles.modalBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnSave]}
+                onPress={handleSaveProfile}
+                disabled={isSavingProfile}
+              >
+                <Text style={styles.modalBtnSaveText}>
+                  {isSavingProfile ? 'Saving...' : 'Save'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <FloatingNavBar />
     </View>
@@ -847,5 +1047,85 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
     paddingVertical: 10,
     letterSpacing: 0.3,
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: SURFACE,
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: BORDER,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+      } as any,
+      default: {
+        shadowColor: '#0f172a',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+        elevation: 10,
+      },
+    }),
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: TEXT_PRIMARY,
+    marginBottom: 4,
+  },
+  modalSub: {
+    fontSize: 14,
+    color: TEXT_MUTED,
+    marginBottom: 20,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: TEXT_PRIMARY,
+    backgroundColor: '#f8fafc',
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnCancel: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  modalBtnCancelText: {
+    color: TEXT_SECONDARY,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  modalBtnSave: {
+    backgroundColor: PRIMARY,
+  },
+  modalBtnSaveText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });

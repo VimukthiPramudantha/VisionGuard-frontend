@@ -107,7 +107,7 @@ export default function IdentifyTab() {
           identifyResult.match ? styles.matchCard : styles.noMatchCard
         ]}>
           <Text style={styles.resultTitle}>
-            {identifyResult.match ? `✅ Match Found` : `❌ No Match`}
+            {identifyResult.match ? `Match Found` : `No Match`}
           </Text>
           {identifyResult.match && (
             <View style={styles.matchDetails}>
