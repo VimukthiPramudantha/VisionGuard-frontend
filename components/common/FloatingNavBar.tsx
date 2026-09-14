@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { Home, Camera, Bell, User, Users } from 'lucide-react-native';
 import { useRouter, usePathname } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api } from '../../services/api';
+import { api, pollingApi } from '../../services/api';
 
 const navItems = [
   { name: 'Dashboard', icon: Home, route: '/(tabs)/dashboard', match: 'dashboard' },
@@ -21,30 +21,51 @@ export default function FloatingNavBar() {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
-  const fetchUnreadCount = async () => {
+  const fetchUnreadCount = async (signal?: AbortSignal) => {
     try {
       const userStr = await AsyncStorage.getItem('user');
       if (userStr) {
         const user = JSON.parse(userStr);
         if (user && user.id) {
-          const response = await api.get(`/alerts/unread-count?user_id=${user.id}`);
+          const response = await pollingApi.get(`/alerts/unread-count?user_id=${user.id}`, { signal });
           setUnreadCount(response.data.unread_count || 0);
         }
       }
-    } catch (error) {
-      console.error('Failed to fetch unread count:', error);
+    } catch (error: any) {
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') return;
+      console.warn('Failed to fetch unread count:', error?.message ?? error);
     }
   };
 
   useEffect(() => {
-    fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 15000);
-    return () => clearInterval(interval);
+    let intervalDelay = 15000;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let abortController: AbortController | null = null;
+
+    const schedule = () => {
+      timeoutId = setTimeout(async () => {
+        abortController = new AbortController();
+        await fetchUnreadCount(abortController.signal);
+        schedule();
+      }, intervalDelay);
+    };
+
+    // Initial fetch
+    abortController = new AbortController();
+    fetchUnreadCount(abortController.signal);
+    schedule();
+
+    return () => {
+      clearTimeout(timeoutId);
+      abortController?.abort();
+    };
   }, [pathname]);
+
+  const isWeb = Platform.OS === 'web';
 
   return (
     <View style={styles.wrapper}>
-      <View style={styles.nav}>
+      <View style={[styles.nav, isWeb && webStyles.nav]}>
         {navItems.map((item, index) => {
           const isActive = pathname === item.route || pathname.includes(item.match);
           const isHovered = hoveredIndex === index;
@@ -56,8 +77,11 @@ export default function FloatingNavBar() {
               key={index}
               style={[
                 styles.navItem,
+                isWeb && webStyles.navItem,
                 isActive && styles.activeNavItem,
+                isActive && isWeb && webStyles.activeNavItem,
                 isHovered && !isActive && styles.hoveredNavItem,
+                isHovered && !isActive && isWeb && webStyles.hoveredNavItem,
               ]}
               // @ts-ignore
               onPress={() => router.replace(item.route)}
@@ -82,6 +106,7 @@ export default function FloatingNavBar() {
               </View>
               <View style={[
                 styles.labelContainer,
+                isWeb && webStyles.labelContainer,
                 showLabel ? styles.labelContainerVisible : styles.labelContainerHidden
               ]}>
                 <Text 
@@ -99,6 +124,40 @@ export default function FloatingNavBar() {
   );
 }
 
+const webStyles = {
+  nav: {
+    background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 100%)',
+    backdropFilter: 'blur(30px) saturate(220%)',
+    borderColor: 'rgba(255, 255, 255, 0.28)',
+    boxShadow: `
+      inset 0 16px 16px -12px rgba(255, 255, 255, 0.4),
+      inset 0 2px 3px rgba(255, 255, 255, 0.3),
+      inset 0 -2px 3px rgba(0, 0, 0, 0.15),
+      0 16px 36px rgba(0, 0, 0, 0.3)
+    `,
+  } as any,
+  navItem: {
+    transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+  } as any,
+  activeNavItem: {
+    background: 'linear-gradient(135deg, #1fb2c5 0%, #1d4585 100%)',
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+    boxShadow: `
+      inset 0 8px 8px -4px rgba(255, 255, 255, 0.45),
+      inset 0 1px 2px rgba(255, 255, 255, 0.3),
+      0 6px 20px rgba(31, 178, 197, 0.45)
+    `,
+  } as any,
+  hoveredNavItem: {
+    background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%)',
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    boxShadow: 'inset 0 4px 6px -3px rgba(255, 255, 255, 0.25)',
+  } as any,
+  labelContainer: {
+    transition: 'max-width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease, margin-left 0.5s ease',
+  } as any,
+};
+
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
@@ -114,22 +173,9 @@ const styles = StyleSheet.create({
     padding: 6,
     borderWidth: 1,
     elevation: 20,
-    
     ...Platform.select({
-      web: {
-        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 100%)',
-        backdropFilter: 'blur(30px) saturate(220%)',
-        borderColor: 'rgba(255, 255, 255, 0.28)',
-        boxShadow: `
-          inset 0 16px 16px -12px rgba(255, 255, 255, 0.4),
-          inset 0 2px 3px rgba(255, 255, 255, 0.3),
-          inset 0 -2px 3px rgba(0, 0, 0, 0.15),
-          0 16px 36px rgba(0, 0, 0, 0.3)
-        `,
-      } as any,
       default: {
         backgroundColor: 'rgba(220, 232, 248, 0.92)',
-        border:'1px',
         borderColor: 'rgba(59, 59, 59, 0.21)',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 12 },
@@ -147,37 +193,16 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
     borderWidth: 1,
     borderColor: 'transparent',
-    
-    ...Platform.select({
-      web: {
-        transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-      } as any,
-    }),
   },
   activeNavItem: {
     ...Platform.select({
-      web: {
-        background: 'linear-gradient(135deg, #1fb2c5 0%, #1d4585 100%)',
-        borderColor: 'rgba(255, 255, 255, 0.25)',
-        boxShadow: `
-          inset 0 8px 8px -4px rgba(255, 255, 255, 0.45),
-          inset 0 1px 2px rgba(255, 255, 255, 0.3),
-          0 6px 20px rgba(31, 178, 197, 0.45)
-        `,
-      } as any,
       default: {
-        color:"white",
         backgroundColor: '#000205a8',
       },
     }),
   },
   hoveredNavItem: {
     ...Platform.select({
-      web: {
-        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%)',
-        borderColor: 'rgba(255, 255, 255, 0.18)',
-        boxShadow: 'inset 0 4px 6px -3px rgba(255, 255, 255, 0.25)',
-      } as any,
       default: {
         backgroundColor: 'rgba(255, 255, 255, 0.15)',
       },
@@ -187,11 +212,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
-    ...Platform.select({
-      web: {
-        transition: 'max-width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease, margin-left 0.5s ease',
-      } as any,
-    }),
   },
   labelContainerVisible: {
     maxWidth: 130,
