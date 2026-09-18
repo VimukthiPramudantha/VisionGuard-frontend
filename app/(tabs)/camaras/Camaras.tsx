@@ -49,6 +49,7 @@ export default function CamarasScreen() {
   const [newCamUrl, setNewCamUrl] = useState('');
   const [newCamLocation, setNewCamLocation] = useState('');
   const [adding, setAdding] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [selectedCameraForFullView, setSelectedCameraForFullView] = useState<Camera | null>(null);
   const [fullscreenUri, setFullscreenUri] = useState<string>('');
   const [activeCameraIndex, setActiveCameraIndex] = useState<number>(0);
@@ -132,18 +133,23 @@ export default function CamarasScreen() {
   }, []);
 
   useEffect(() => {
-    if (minTimeDone && fetchDone && cameras.length > 0) {
+    if (minTimeDone && fetchDone) {
       setLoading(false);
     }
-  }, [minTimeDone, fetchDone, cameras]);
+  }, [minTimeDone, fetchDone]);
 
   const fetchCameras = async () => {
     try {
+      setFetchError(null);
       const response = await api.get('/cameras');
       setCameras(response.data);
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'Failed to load cameras');
+    } catch (error: any) {
+      const isTimeout = error.code === 'ECONNABORTED' || error.message?.includes('timeout');
+      const msg = isTimeout
+        ? 'Backend server is unreachable. Is it running?'
+        : (error.response?.data?.detail ?? 'Failed to load cameras');
+      console.warn('[Cameras] fetchCameras error:', msg);
+      setFetchError(msg);
     } finally {
       setFetchDone(true);
       setRefreshing(false);
@@ -549,6 +555,15 @@ export default function CamarasScreen() {
                     })}
                   </View>
                 </View>
+              </View>
+            ) : fetchError ? (
+              <View style={styles.emptyContainer}>
+                <Video size={44} color="#ef4444" strokeWidth={1.5} />
+                <Text style={[styles.emptyText, { color: '#ef4444' }]}>Connection Failed</Text>
+                <Text style={styles.emptySubtext}>{fetchError}</Text>
+                <TouchableOpacity style={styles.addButton} onPress={onRefresh}>
+                  <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>Retry</Text>
+                </TouchableOpacity>
               </View>
             ) : (
               <View style={styles.emptyContainer}>
